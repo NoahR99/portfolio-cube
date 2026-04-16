@@ -7,7 +7,13 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { name, email, subject, message } = req.body;
+  // Parse body if it comes in as a string
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  }
+
+  const { name, email, subject, message } = body || {};
 
   if (!name || !email || !subject || !message) {
     return res.status(400).json({ error: 'All fields are required' });

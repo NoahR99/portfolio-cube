@@ -2,30 +2,13 @@ const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-function parseBody(req) {
-  const raw = req.body;
-
-  // Already an object with expected fields
-  if (raw && typeof raw === 'object' && !Buffer.isBuffer(raw) && raw.name) {
-    return raw;
-  }
-
-  // Buffer → string → object
-  if (Buffer.isBuffer(raw)) {
-    return JSON.parse(raw.toString('utf-8'));
-  }
-
-  // String → object
-  if (typeof raw === 'string') {
-    return JSON.parse(raw);
-  }
-
-  // Vercel sometimes nests the parsed body
-  if (raw && typeof raw === 'object') {
-    return raw;
-  }
-
-  return null;
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    req.on('error', reject);
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -43,13 +26,20 @@ module.exports = async function handler(req, res) {
 
   let body;
   try {
-    body = parseBody(req);
+    // Try req.body first (Vercel auto-parsed)
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      body = req.body;
+    } else if (Buffer.isBuffer(req.body)) {
+      body = JSON.parse(req.body.toString('utf-8'));
+    } else if (typeof req.body === 'string' && req.body.length > 0) {
+      body = JSON.parse(req.body);
+    } else {
+      // Fallback: read raw stream
+      const raw = await getRawBody(req);
+      body = JSON.parse(raw);
+    }
   } catch (err) {
     return res.status(400).json({ error: 'Invalid JSON', detail: err.message });
-  }
-
-  if (!body) {
-    return res.status(400).json({ error: 'Empty body', bodyType: typeof req.body });
   }
 
   const { name, email, subject, message } = body;
@@ -57,7 +47,7 @@ module.exports = async function handler(req, res) {
   if (!name || !email || !subject || !message) {
     return res.status(400).json({
       error: 'All fields are required',
-      received: Object.keys(body),
+      received: body,
     });
   }
 

@@ -2389,17 +2389,38 @@
 
         window.resetFilters = function() { document.querySelector('.filter-btn').click(); }
 
-        window.sendContactForm = function(e) {
+        window.sendContactForm = async function(e) {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const btnText = btn.querySelector('span');
+            const origText = btnText.textContent;
+
             const name = document.getElementById('contact-name').value.trim();
             const email = document.getElementById('contact-email').value.trim();
             const subject = document.getElementById('contact-subject').value.trim();
             const message = document.getElementById('contact-message').value.trim();
-            const body = 'From: ' + name + ' (' + email + ')\n\n' + message;
-            const mailto = 'mailto:noahrobisone@gmail.com'
-                + '?subject=' + encodeURIComponent(subject)
-                + '&body=' + encodeURIComponent(body);
-            window.location.href = mailto;
+
+            btn.disabled = true;
+            btnText.textContent = 'Sending...';
+
+            try {
+                const res = await fetch('/api/contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, subject, message })
+                });
+
+                if (!res.ok) throw new Error('Send failed');
+
+                btnText.textContent = 'Sent!';
+                document.getElementById('contact-form').reset();
+                setTimeout(() => { btnText.textContent = origText; btn.disabled = false; }, 3000);
+            } catch (err) {
+                btnText.textContent = 'Error — try again';
+                btn.disabled = false;
+                setTimeout(() => { btnText.textContent = origText; }, 3000);
+            }
+
             return false;
         };
     </script>

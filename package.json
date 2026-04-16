@@ -1,0 +1,23 @@
+{
+  "name": "portfolio_cube",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NoahR99/portfolio-cube.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/NoahR99/portfolio-cube/issues"
+  },
+  "homepage": "https://github.com/NoahR99/portfolio-cube#readme",
+  "dependencies": {
+    "resend": "^6.12.0"
+  }
+}

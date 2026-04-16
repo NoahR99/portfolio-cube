@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noah Robison | Portfolio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+    <script src="https://unpkg.com/gsap@3/dist/gsap.min.js"></script>
+    <script src="https://unpkg.com/gsap@3/dist/ScrollTrigger.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
+                    },
+                    colors: {
+                        void: '#000000',
+                        surface: '#080808',
+                        accent: '#ffffff',
+                        muted: '#666666',
+                        dim: '#333333'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #e8eaef;
+            color: #111;
+            overscroll-behavior: none;
+            font-family: 'Inter', sans-serif;
+            scrollbar-gutter: stable; /* reserve space so no layout shift */
+        }
+        .font-mono { font-family: 'IBM Plex Mono', monospace; }
+
+        /* Subtle grain */
+        .grain::before {
+            content: ''; position: fixed; inset: 0; opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: 9999; mix-blend-mode: multiply;
+        }
+
+        /* Background canvas (vignette) */
+        #arch-grid {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
+        }
+
+        /* Background: clean light environment */
+        #bg-environment {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background:
+                radial-gradient(ellipse 50% 45% at 50% 42%,
+                    rgba(255,255,255,0.4) 0%,
+                    transparent 70%
+                ),
+                linear-gradient(160deg,
+                    rgba(235,240,250,1) 0%,
+                    rgba(240,238,235,1) 50%,
+                    rgba(232,235,245,1) 100%
+                );
+        }
+
+        /* Page preview background — shows actual page content behind the cube */
+        #page-preview-container {
+            position: fixed; inset: 0; z-index: 5;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .page-preview-bg {
+            position: absolute; inset: 0;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            overflow: hidden;
+        }
+        .page-preview-bg.active {
+            opacity: 1;
+        }
+
+        /* Nav backdrop when preview is active */
+        #site-nav.preview-active {
+            background: rgba(240,240,240,0.85);
+            backdrop-filter: blur(8px);
+            padding: 1rem 1.2rem;
+            border-radius: 8px;
+            margin-right: -0.5rem;
+        }
+        .page-preview-bg .preview-clone {
+            position: absolute; inset: 0;
+            overflow-y: auto;
+            pointer-events: none;
+        }
+
+        /* No floor or reflection — clean background */
+
+        /* Dynamic shadow — on the floor well below the cube */
+        #cube-shadow {
+            position: fixed;
+            left: 50%;
+            bottom: 8vh;
+            width: 200px; height: 30px;
+            transform: translateX(-50%);
+            background: radial-gradient(ellipse, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 45%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Cursor glow */
+        #cursor-glow {
+            position: fixed;
+            width: 400px; height: 400px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 30%, transparent 60%);
+            pointer-events: none;
+            z-index: 1;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s;
+        }
+
+        /* Floating particles — faint dark specks */
+        .particle {
+            position: fixed;
+            width: 1px; height: 1px;
+            background: rgba(0,0,0,0.08);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 3D Engine */
+        :root {
+            --cube-size: 150px;
+            --tz: 75px;
+        }
+        @media (min-width: 768px) {
+            :root { --cube-size: 200px; --tz: 100px; }
+        }
+        @media (min-width: 1024px) {
+            :root { --cube-size: 250px; --tz: 125px; }
+        }
+
+        .scene-wrapper {
+            position: fixed; inset: 0; display: flex; justify-content: center;
+            align-items: center;
+            padding-top: 6vh;
+            perspective: 1200px; z-index: 10; pointer-events: none;
+        }
+
+        .camera {
+            width: var(--cube-size); height: var(--cube-size);
+            transform-style: preserve-3d;
+            transform: translateZ(0px);
+        }
+
+        .cube {
+            width: 100%; height: 100%; position: relative;
+            transform-style: preserve-3d;
+            pointer-events: auto;
+        }
+
+        .face {
+            position: absolute; width: var(--cube-size); height: var(--cube-size);
+            backface-visibility: hidden;
+            background: linear-gradient(145deg, #0d0d0f 0%, #000000 40%, #050507 100%);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer;
+            overflow: hidden;
+            transition: box-shadow 0.5s ease;
+        }
+
+        .face.hovered {
+            box-shadow:
+                0 0 60px rgba(0,0,0,0.2),
+                0 0 120px rgba(0,0,0,0.1);
+        }
+
+        /* Invisible click target behind each face — full rectangle so corners are clickable */
+        .face-hitbox {
+            position: absolute; width: var(--cube-size); height: var(--cube-size);
+            cursor: pointer;
+            background: transparent;
+            backface-visibility: hidden;
+        }
+        .face-hitbox-front  { transform: rotateY(0deg) translateZ(var(--tz)); }
+        .face-hitbox-right  { transform: rotateY(90deg) translateZ(var(--tz)); }
+        .face-hitbox-back   { transform: rotateY(180deg) translateZ(var(--tz)); }
+        .face-hitbox-left   { transform: rotateY(-90deg) translateZ(var(--tz)); }
+        .face-hitbox-top    { transform: rotateX(90deg) translateZ(var(--tz)); }
+        .face-hitbox-bottom { transform: rotateX(-90deg) translateZ(var(--tz)); }
+
+        .face-front  { transform: rotateY(0deg) translateZ(var(--tz)); }
+        .face-right  { transform: rotateY(90deg) translateZ(var(--tz)); }
+        .face-back   { transform: rotateY(180deg) translateZ(var(--tz)); }
+        .face-left   { transform: rotateY(-90deg) translateZ(var(--tz)); }
+        .face-top    { transform: rotateX(90deg) translateZ(var(--tz)); }
+        .face-bottom { transform: rotateX(-90deg) translateZ(var(--tz)); }
+
+        .face-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 1rem;
+            font-weight: 500;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            z-index: 10;
+            color: rgba(255, 255, 255, 0.35);
+            transition: all 0.4s ease;
+            padding: 0;
+            border: none;
+            background: none;
+        }
+
+        /* On hover: label shrinks and moves to top-left corner */
+        .face.hovered .face-label {
+            position: absolute;
+            top: 0.75rem;
+            left: 1rem;
+            font-size: 0.55rem;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 0.2em;
+        }
+
+        /* Panel designation markers — small engineered details */
+        .face-designation {
+            position: absolute;
+            bottom: 0.75rem;
+            right: 1rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.5rem;
+            letter-spacing: 0.15em;
+            color: rgba(255,255,255,0.1);
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+        .face.hovered .face-designation { opacity: 0; }
+
+        /* Content wrapper inside each face */
+        .face-content {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 10;
+        }
+
+        /* Mini-UI: hidden by default, screen-on reveal on hover */
+        .mini-ui {
+            position: absolute; inset: 0; padding: 0.75rem; padding-top: 1.6rem;
+            display: flex; flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 5;
+            transition: none;
+        }
+
+        /* Screen-on scanline overlay */
+        .screen-on-fx {
+            position: absolute; inset: 0;
+            z-index: 6;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .face.hovered .screen-on-fx {
+            opacity: 1;
+        }
+        .face.hovered .screen-on-fx::before {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(180deg,
+                transparent 0px, transparent 2px,
+                rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 4px
+            );
+        }
+
+        /* Keyframes for screen boot */
+        @keyframes screenOn {
+            0% { opacity: 0; filter: brightness(0); }
+            15% { opacity: 0.6; filter: brightness(2); }
+            30% { opacity: 0.3; filter: brightness(0.5); }
+            50% { opacity: 0.7; filter: brightness(1.2); }
+            100% { opacity: 0.65; filter: brightness(1); }
+        }
+        @keyframes screenOff {
+            0% { opacity: 0.65; filter: brightness(1); }
+            40% { opacity: 0.3; filter: brightness(0.5); }
+            100% { opacity: 0; filter: brightness(0); }
+        }
+
+        .face.hovered .mini-ui {
+            animation: screenOn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .face:not(.hovered) .mini-ui {
+            animation: screenOff 0.2s ease-out forwards;
+        }
+
+        /* Page Overlay System */
+        .page-overlay {
+            position: fixed;
+            top: 10vh; bottom: 4vh; left: 4vw; right: 12vw;
+            z-index: 45; background: #000; color: #fff;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto; overflow-x: hidden;
+            border-radius: 12px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.15);
+        }
+        .page-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+        /* Override the fixed-position wrapper that holds the back button —
+           make it relative to the modal, not the viewport */
+        .page-overlay > .min-h-screen > .fixed,
+        .page-overlay > header .back-to-cube,
+        .page-overlay .fixed {
+            position: sticky !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: auto !important;
+            z-index: 60;
+            padding: 1rem 1.2rem !important;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(8px);
+        }
+        /* Back button styling inside modal */
+        .page-overlay .back-to-cube {
+            color: rgba(255,255,255,0.7) !important;
+            background: rgba(255,255,255,0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+        .page-overlay .back-to-cube:hover {
+            color: #fff !important;
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        /* Glass header */
+        .glass-header {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        /* Filter buttons */
+        .filter-btn {
+            position: relative; overflow: hidden;
+        }
+        .filter-btn.active {
+            color: #000; background: #fff; border-color: #fff;
+        }
+
+        /* Project cards */
+        .project-card { cursor: pointer; }
+        .project-card .img-wrapper {
+            overflow: hidden; position: relative;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .project-card img {
+            transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .project-card:hover img { transform: scale(1.05); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Scroll Proxy */
+        .scroll-proxy { height: 50000vh; width: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* Skill bars */
+        .skill-bar-track {
+            height: 1px; background: rgba(255,255,255,0.1); overflow: hidden;
+        }
+        .skill-bar-fill {
+            height: 100%; background: #fff;
+            transform-origin: left;
+            transition: transform 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Timeline */
+        .timeline-line {
+            position: absolute; left: 5px; top: 20px; bottom: 0;
+            width: 1px; background: rgba(255,255,255,0.08);
+        }
+        .timeline-dot {
+            width: 11px; height: 11px; border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.4);
+            background: #000;
+            flex-shrink: 0;
+        }
+
+        /* Lab cards */
+        .lab-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: border-color 0.3s, background 0.3s, transform 0.3s;
+        }
+        .lab-card:hover {
+            border-color: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.04);
+            transform: translateY(-4px);
+        }
+
+        /* Contact form */
+        .form-input {
+            width: 100%; background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 14px 18px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.875rem;
+            color: #fff;
+            transition: border-color 0.3s, background 0.3s;
+            outline: none;
+        }
+        .form-input::placeholder { color: rgba(255,255,255,0.2); }
+        .form-input:focus {
+            border-color: rgba(255,255,255,0.4);
+            background: rgba(255,255,255,0.06);
+        }
+
+        /* Stagger-in animations */
+        .stagger-in > * {
+            opacity: 0; transform: translateY(20px);
+        }
+
+        /* Index items */
+        .index-item {
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background 0.2s, padding-left 0.3s;
+        }
+        .index-item:hover {
+            background: rgba(255,255,255,0.03);
+            padding-left: 1.5rem;
+        }
+
+        /* Status indicator */
+        .status-dot {
+            width: 6px; height: 6px; border-radius: 50%; background: #fff;
+            animation: status-pulse 2.5s ease-in-out infinite;
+        }
+        @keyframes status-pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,255,255,0.3); }
+            50% { opacity: 0.4; box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+        }
+
+        /* Intro overlay */
+        #intro-overlay {
+            position: fixed; inset: 0; z-index: 100;
+            background: #e8eaef;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 1rem;
+        }
+        #intro-overlay .intro-line {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: rgba(0,0,0,0);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Intro Overlay -->
+    <div id="intro-overlay">
+        <div class="intro-line">Initializing</div>
+        <div class="intro-line">Noah Robison</div>
+        <div class="intro-line">Portfolio</div>
+    </div>
+
+    <!-- Skip button — outside the overlay so it stays visible during the full build -->
+    <button id="skip-intro" style="
+        position:fixed; bottom:2.5rem; left:50%; transform:translateX(-50%);
+        z-index:101;
+        font-family:'IBM Plex Mono',monospace; font-size:0.65rem;
+        letter-spacing:0.2em; text-transform:uppercase;
+        color:rgba(0,0,0,0.3); background:rgba(240,240,240,0.8); border:1px solid rgba(0,0,0,0.1);
+        padding:0.5rem 1.5rem; cursor:pointer; border-radius:4px;
+        backdrop-filter:blur(4px);
+        transition: color 0.3s, border-color 0.3s, opacity 0.3s;
+    " onmouseover="this.style.color='rgba(0,0,0,0.6)';this.style.borderColor='rgba(0,0,0,0.3)'"
+       onmouseout="this.style.color='rgba(0,0,0,0.3)';this.style.borderColor='rgba(0,0,0,0.1)'"
+    >Skip</button>
+
+    <!-- Page preview container — cloned page content shown on hover -->
+    <div id="page-preview-container"></div>
+
+    <!-- Atmosphere -->
+    <div class="grain"></div>
+    <div id="bg-environment"></div>
+    <canvas id="arch-grid"></canvas>
+    <!-- No floor or reflection elements -->
+    <div id="cube-shadow"></div>
+    <div id="cursor-glow"></div>
+
+    <!-- Floating Particles -->
+    <div id="particles-container"></div>
+
+    <!-- Header -->
+    <div id="site-header" class="fixed top-0 left-0 w-full p-6 sm:p-10 flex justify-between items-start z-20 pointer-events-none" style="opacity:0">
+        <div class="flex items-center gap-3">
+            <div class="font-sans font-bold text-sm tracking-[0.15em] uppercase">Noah Robison</div>
+            <div class="status-dot hidden sm:block mt-0.5"></div>
+        </div>
+        <div class="font-mono text-[10px] text-muted flex flex-col items-end gap-1">
+            <span>SCROLL TO ROTATE</span>
+            <span>CLICK FACE TO ENTER</span>
+        </div>
+    </div>
+
+    <!-- Hover Indicator -->
+    <div id="hover-indicator" class="fixed top-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-0 transition-opacity duration-300 flex flex-col items-center">
+        <span class="font-mono text-[10px] text-muted tracking-widest mb-1">TARGET</span>
+        <div id="hover-indicator-text" class="font-sans text-xl font-bold tracking-widest text-white uppercase"></div>
+    </div>
+
+    <!-- Side Navigation -->
+    <nav id="site-nav" class="fixed right-6 sm:right-10 top-1/2 -translate-y-1/2 z-40 hidden md:flex flex-col gap-5 font-mono text-[10px] uppercase tracking-widest text-dim" style="opacity:0">
+        <button class="nav-link hover:text-white text-right transition-colors flex items-center justify-end gap-3 group" data-target="page-archive" data-face=".face-front">
+            <span class="transition-colors">Projects</span>
+            <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-white transition-colors"></div>
+        </button>
+        <button class="nav-link hover:text-white text-right transition-colors flex items-center justify-end gap-3 group" data-target="page-about" data-face=".face-right">
+            <span class="transition-colors">About</span>
+            <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-white transition-colors"></div>
+        </button>
+        <button class="nav-link hover:text-white text-right transition-colors flex items-center justify-end gap-3 group" data-target="page-labs" data-face=".face-back">
+            <span class="transition-colors">Resume</span>
+            <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-white transition-colors"></div>
+        </button>
+        <button class="nav-link hover:text-white text-right transition-colors flex items-center justify-end gap-3 group" data-target="page-contact" data-face=".face-left">
+            <span class="transition-colors">Contact</span>
+            <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-white transition-colors"></div>
+        </button>
+        <button class="nav-link hover:text-white text-right transition-colors flex items-center justify-end gap-3 group" data-target="page-vision" data-face=".face-top">
+            <span class="transition-colors">Calypso</span>
+            <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-white transition-colors"></div>
+        </button>
+        <button class="nav-link hover:text-white text-right transition-colors flex items-center justify-end gap-3 group" data-target="page-index" data-face=".face-bottom">
+            <span class="transition-colors">COSMOS</span>
+            <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-white transition-colors"></div>
+        </button>
+    </nav>
+
+    <!-- Scroll Proxy -->
+    <div class="scroll-proxy" id="scroll-proxy"></div>
+
+    <!-- 3D Cube Scene -->
+    <div class="scene-wrapper" id="scene-wrapper" style="opacity:0">
+        <!-- Depth halo — appears behind the cube when a preview is active -->
+        <div id="cube-depth-halo" style="
+            position:absolute;
+            width:450px; height:450px;
+            border-radius:50%;
+            background:radial-gradient(circle, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.06) 30%, transparent 65%);
+            pointer-events:none;
+            opacity:0;
+            transition: opacity 0.5s ease;
+        "></div>
+        <div class="camera" id="camera">
+            <div class="cube" id="cube">
+                <!-- Solid cube interior — 6 inner black faces slightly inset so you never see through -->
+                <div class="cube-fill" style="position:absolute;width:var(--cube-size);height:var(--cube-size);background:#000;transform:rotateY(0deg) translateZ(calc(var(--tz) - 1px))"></div>
+                <div class="cube-fill" style="position:absolute;width:var(--cube-size);height:var(--cube-size);background:#000;transform:rotateY(180deg) translateZ(calc(var(--tz) - 1px))"></div>
+                <div class="cube-fill" style="position:absolute;width:var(--cube-size);height:var(--cube-size);background:#000;transform:rotateY(90deg) translateZ(calc(var(--tz) - 1px))"></div>
+                <div class="cube-fill" style="position:absolute;width:var(--cube-size);height:var(--cube-size);background:#000;transform:rotateY(-90deg) translateZ(calc(var(--tz) - 1px))"></div>
+                <div class="cube-fill" style="position:absolute;width:var(--cube-size);height:var(--cube-size);background:#000;transform:rotateX(90deg) translateZ(calc(var(--tz) - 1px))"></div>
+                <div class="cube-fill" style="position:absolute;width:var(--cube-size);height:var(--cube-size);background:#000;transform:rotateX(-90deg) translateZ(calc(var(--tz) - 1px))"></div>
+                <!-- Click hitboxes — full rectangles behind clipped faces -->
+                <div class="face-hitbox face-hitbox-front" data-face-idx="0"></div>
+                <div class="face-hitbox face-hitbox-right" data-face-idx="1"></div>
+                <div class="face-hitbox face-hitbox-back" data-face-idx="2"></div>
+                <div class="face-hitbox face-hitbox-left" data-face-idx="3"></div>
+                <div class="face-hitbox face-hitbox-top" data-face-idx="4"></div>
+                <div class="face-hitbox face-hitbox-bottom" data-face-idx="5"></div>
+                <!-- WORK: archive grid preview -->
+                <div class="face face-front group" data-target="page-archive" data-rot-x="0" data-rot-y="0">
+                    <div class="face-content">
+                        <div class="face-designation">PNL-01 // ARCHIVE</div>
+                        <div class="screen-on-fx"></div>
+                        <div class="mini-ui gap-1.5">
+                            <div class="flex justify-between items-center mb-1">
+                                <div class="h-1.5 w-16 bg-white/30"></div>
+                                <div class="flex gap-1"><div class="h-1.5 w-6 bg-white/15 rounded-full"></div><div class="h-1.5 w-6 bg-white/10 rounded-full"></div><div class="h-1.5 w-6 bg-white/10 rounded-full"></div></div>
+                            </div>
+                            <div class="border-t border-white/10 pt-1.5"></div>
+                            <div class="grid grid-cols-3 gap-1.5 flex-1">
+                                <div class="bg-white/12 border border-white/5"></div>
+                                <div class="bg-white/8 border border-white/5"></div>
+                                <div class="bg-white/10 border border-white/5"></div>
+                                <div class="bg-white/8 border border-white/5"></div>
+                                <div class="bg-white/12 border border-white/5"></div>
+                                <div class="bg-white/6 border border-white/5"></div>
+                            </div>
+                        </div>
+                        <h2 class="face-label">Projects</h2>
+                    </div>
+                </div>
+                <!-- ABOUT: profile layout preview -->
+                <div class="face face-right group" data-target="page-about" data-rot-x="0" data-rot-y="-90">
+                    <div class="face-content">
+                        <div class="face-designation">PNL-02 // PROFILE</div>
+                        <div class="screen-on-fx"></div>
+                        <div class="mini-ui gap-1.5">
+                            <div class="font-mono text-[5px] text-white/30 uppercase tracking-widest mb-0.5">About</div>
+                            <div class="h-2.5 w-4/5 bg-white/25"></div>
+                            <div class="h-1.5 w-3/5 bg-white/15 mb-2"></div>
+                            <div class="grid grid-cols-2 gap-2 flex-1">
+                                <div class="flex flex-col gap-1">
+                                    <div class="h-1 w-full bg-white/10"></div>
+                                    <div class="h-1 w-5/6 bg-white/8"></div>
+                                    <div class="h-1 w-4/5 bg-white/8"></div>
+                                    <div class="h-1 w-full bg-white/6"></div>
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex justify-between"><div class="h-1 w-1/3 bg-white/10"></div><div class="h-1 w-1/3 bg-white/15"></div></div>
+                                    <div class="flex justify-between"><div class="h-1 w-1/3 bg-white/10"></div><div class="h-1 w-1/3 bg-white/15"></div></div>
+                                    <div class="flex justify-between"><div class="h-1 w-1/3 bg-white/10"></div><div class="h-1 w-1/3 bg-white/15"></div></div>
+                                    <div class="flex justify-between"><div class="h-1 w-1/3 bg-white/10"></div><div class="h-1 w-1/4 bg-white/20"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <h2 class="face-label">About</h2>
+                    </div>
+                </div>
+                <!-- LABS: terminal + cards preview -->
+                <div class="face face-back group" data-target="page-labs" data-rot-x="0" data-rot-y="-180">
+                    <div class="face-content">
+                        <div class="face-designation">PNL-03 // RESEARCH</div>
+                        <div class="screen-on-fx"></div>
+                        <div class="mini-ui gap-1.5">
+                            <div class="font-mono text-[5px] text-white/30 uppercase tracking-widest mb-0.5">Resume</div>
+                            <div class="bg-white/5 border border-white/8 p-1.5 mb-1.5">
+                                <div class="flex items-center gap-1 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-white/40"></div><div class="w-1.5 h-1.5 rounded-full bg-white/15"></div></div>
+                                <div class="font-mono text-[4px] text-white/35 leading-relaxed">$ status --all<br>> experiments: 6<br>> status: ok<br>> _|</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1.5 flex-1">
+                                <div class="bg-white/5 border border-white/8 p-1"><div class="h-1 w-2/3 bg-white/20 mb-1"></div><div class="h-0.5 w-full bg-white/8"></div></div>
+                                <div class="bg-white/5 border border-white/8 p-1"><div class="h-1 w-2/3 bg-white/20 mb-1"></div><div class="h-0.5 w-full bg-white/8"></div></div>
+                                <div class="bg-white/3 border border-white/5 p-1"><div class="h-1 w-2/3 bg-white/12 mb-1"></div><div class="h-0.5 w-full bg-white/5"></div></div>
+                                <div class="bg-white/3 border border-white/5 p-1"><div class="h-1 w-2/3 bg-white/12 mb-1"></div><div class="h-0.5 w-full bg-white/5"></div></div>
+                            </div>
+                        </div>
+                        <h2 class="face-label">Resume</h2>
+                    </div>
+                </div>
+                <!-- CONTACT: form layout preview -->
+                <div class="face face-left group" data-target="page-contact" data-rot-x="0" data-rot-y="90">
+                    <div class="face-content">
+                        <div class="face-designation">PNL-04 // TRANSMIT</div>
+                        <div class="screen-on-fx"></div>
+                        <div class="mini-ui gap-1.5">
+                            <div class="font-mono text-[5px] text-white/30 uppercase tracking-widest mb-0.5">Contact</div>
+                            <div class="h-2.5 w-3/4 bg-white/20 mb-1"></div>
+                            <div class="grid grid-cols-5 gap-2 flex-1">
+                                <div class="col-span-3 flex flex-col gap-1.5">
+                                    <div class="grid grid-cols-2 gap-1"><div class="h-3 bg-white/8 border border-white/10"></div><div class="h-3 bg-white/8 border border-white/10"></div></div>
+                                    <div class="h-3 bg-white/8 border border-white/10"></div>
+                                    <div class="flex-1 bg-white/6 border border-white/8"></div>
+                                    <div class="h-3 w-1/2 bg-white/20"></div>
+                                </div>
+                                <div class="col-span-2 flex flex-col gap-1.5">
+                                    <div class="h-1 w-2/3 bg-white/12"></div>
+                                    <div class="h-1 w-full bg-white/8"></div>
+                                    <div class="mt-2 space-y-1"><div class="h-1 w-full bg-white/8"></div><div class="h-1 w-full bg-white/8"></div><div class="h-1 w-full bg-white/8"></div></div>
+                                    <div class="mt-auto p-1 border border-white/8"><div class="h-1 w-full bg-white/10"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <h2 class="face-label">Contact</h2>
+                    </div>
+                </div>
+                <!-- VISION: quotes/manifesto preview -->
+                <div class="face face-top group" data-target="page-vision" data-rot-x="-90" data-rot-y="0">
+                    <div class="face-content">
+                        <div class="face-designation">PNL-05 // DIRECTIVE</div>
+                        <div class="screen-on-fx"></div>
+                        <div class="mini-ui gap-2">
+                            <div class="font-mono text-[5px] text-white/30 uppercase tracking-widest mb-0.5">Calypso</div>
+                            <div class="flex flex-col gap-3 flex-1 justify-center">
+                                <div class="flex gap-2"><div class="w-0.5 self-stretch bg-white/30"></div><div class="flex flex-col gap-0.5"><div class="h-1.5 w-32 bg-white/20"></div><div class="h-1 w-24 bg-white/10"></div></div></div>
+                                <div class="flex gap-2"><div class="w-0.5 self-stretch bg-white/10"></div><div class="flex flex-col gap-0.5"><div class="h-1.5 w-28 bg-white/15"></div><div class="h-1 w-20 bg-white/8"></div></div></div>
+                                <div class="flex gap-2"><div class="w-0.5 self-stretch bg-white/10"></div><div class="flex flex-col gap-0.5"><div class="h-1.5 w-30 bg-white/15"></div><div class="h-1 w-22 bg-white/8"></div></div></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1.5 mt-1">
+                                <div class="p-1 border border-white/5"><div class="font-mono text-[4px] text-white/15">01</div><div class="h-0.5 w-full bg-white/8 mt-0.5"></div></div>
+                                <div class="p-1 border border-white/5"><div class="font-mono text-[4px] text-white/15">02</div><div class="h-0.5 w-full bg-white/8 mt-0.5"></div></div>
+                            </div>
+                        </div>
+                        <h2 class="face-label">Calypso</h2>
+                    </div>
+                </div>
+                <!-- INDEX: directory list preview -->
+                <div class="face face-bottom group" data-target="page-index" data-rot-x="90" data-rot-y="0">
+                    <div class="face-content">
+                        <div class="face-designation">PNL-06 // MANIFEST</div>
+                        <div class="screen-on-fx"></div>
+                        <div class="mini-ui gap-0">
+                            <div class="font-mono text-[5px] text-white/30 uppercase tracking-widest mb-1.5">COSMOS</div>
+                            <div class="flex-1 flex flex-col gap-0">
+                                <div class="flex justify-between py-1 border-b border-white/8"><div class="flex gap-1.5"><div class="text-[4px] font-mono text-white/20 w-4">001</div><div class="h-1 w-16 bg-white/15"></div></div><div class="h-1 w-6 bg-white/8"></div></div>
+                                <div class="flex justify-between py-1 border-b border-white/8"><div class="flex gap-1.5"><div class="text-[4px] font-mono text-white/20 w-4">002</div><div class="h-1 w-14 bg-white/15"></div></div><div class="h-1 w-6 bg-white/8"></div></div>
+                                <div class="flex justify-between py-1 border-b border-white/8"><div class="flex gap-1.5"><div class="text-[4px] font-mono text-white/20 w-4">003</div><div class="h-1 w-12 bg-white/12"></div></div><div class="h-1 w-6 bg-white/8"></div></div>
+                                <div class="flex justify-between py-1 border-b border-white/8"><div class="flex gap-1.5"><div class="text-[4px] font-mono text-white/20 w-4">004</div><div class="h-1 w-10 bg-white/12"></div></div><div class="h-1 w-6 bg-white/8"></div></div>
+                                <div class="flex justify-between py-1 border-b border-white/8"><div class="flex gap-1.5"><div class="text-[4px] font-mono text-white/20 w-4">005</div><div class="h-1 w-14 bg-white/10"></div></div><div class="h-1 w-6 bg-white/6"></div></div>
+                                <div class="flex justify-between py-1"><div class="flex gap-1.5"><div class="text-[4px] font-mono text-white/20 w-4">006</div><div class="h-1 w-10 bg-white/10"></div></div><div class="h-1 w-6 bg-white/6"></div></div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 mt-1.5 pt-1.5 border-t border-white/8">
+                                <div class="text-center"><div class="text-[5px] font-mono text-white/25">6</div></div>
+                                <div class="text-center"><div class="text-[5px] font-mono text-white/25">6</div></div>
+                                <div class="text-center"><div class="text-[5px] font-mono text-white/25">4</div></div>
+                            </div>
+                        </div>
+                        <h2 class="face-label">COSMOS</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: WORK                                 -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-archive" class="page-overlay">
+        <header class="glass-header sticky top-0 z-30 px-6 py-4 sm:px-10 sm:py-6">
+            <div class="max-w-7xl mx-auto flex flex-col gap-6">
+                <div class="flex justify-between items-center">
+                    <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                        <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i>
+                        <span>Back</span>
+                    </button>
+                    <div class="font-sans text-lg sm:text-xl font-bold tracking-tight uppercase">Selected Projects</div>
+                </div>
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t border-white/5 pt-6">
+                    <div class="relative w-full md:w-80 group">
+                        <i class="ph ph-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-dim group-focus-within:text-white transition-colors"></i>
+                        <input type="text" placeholder="Search work..." class="form-input pl-12">
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest">
+                        <button class="filter-btn active px-4 py-2 border border-white/10 rounded-full transition-all">All</button>
+                        <button class="filter-btn px-4 py-2 border border-white/10 rounded-full text-dim hover:text-white hover:border-white/30 transition-all">Spatial</button>
+                        <button class="filter-btn px-4 py-2 border border-white/10 rounded-full text-dim hover:text-white hover:border-white/30 transition-all">Digital</button>
+                        <button class="filter-btn px-4 py-2 border border-white/10 rounded-full text-dim hover:text-white hover:border-white/30 transition-all">Physical</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-6 py-12 sm:px-10">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-12" id="archive-grid">
+                <article class="project-card group" onclick="openOverlay('page-vision')" style="cursor:pointer">
+                    <div class="img-wrapper aspect-[4/5] bg-surface mb-4">
+                        <img src="calypso_images/CalypsoLogoImage.jpg" alt="Calypso AI platform" class="w-full h-full object-cover opacity-70 group-hover:opacity-100 mix-blend-luminosity group-hover:mix-blend-normal transition-opacity duration-500" loading="lazy">
+                    </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-sans text-lg font-semibold tracking-tight mb-1">Calypso</h3>
+                            <p class="font-mono text-[10px] text-dim uppercase tracking-wider">Product Design / 2026</p>
+                        </div>
+                        <i class="ph ph-arrow-up-right text-lg text-white/0 group-hover:text-white transition-all duration-300"></i>
+                    </div>
+                </article>
+                <article class="project-card group" onclick="openOverlay('page-index')" style="cursor:pointer">
+                    <div class="img-wrapper aspect-[4/5] bg-surface mb-4">
+                        <img src="COSMOS_images/COSMOSGalaxy.png" alt="COSMOS NASA data tools" class="w-full h-full object-cover opacity-70 group-hover:opacity-100 mix-blend-luminosity group-hover:mix-blend-normal transition-opacity duration-500" loading="lazy">
+                    </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-sans text-lg font-semibold tracking-tight mb-1">COSMOS</h3>
+                            <p class="font-mono text-[10px] text-dim uppercase tracking-wider">Personal Project / 2025</p>
+                        </div>
+                        <i class="ph ph-arrow-up-right text-lg text-white/0 group-hover:text-white transition-all duration-300"></i>
+                    </div>
+                </article>
+                <article class="project-card group" onclick="openOverlay('page-lexicon')" style="cursor:pointer">
+                    <div class="img-wrapper aspect-[4/5] bg-surface mb-4">
+                        <img src="lexicon.png" alt="Lexicon typographic mood boards" class="w-full h-full object-cover opacity-70 group-hover:opacity-100 mix-blend-luminosity group-hover:mix-blend-normal transition-opacity duration-500" loading="lazy">
+                    </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-sans text-lg font-semibold tracking-tight mb-1">Lexicon</h3>
+                            <p class="font-mono text-[10px] text-dim uppercase tracking-wider">Personal Project / 2025</p>
+                        </div>
+                        <i class="ph ph-arrow-up-right text-lg text-white/0 group-hover:text-white transition-all duration-300"></i>
+                    </div>
+                </article>
+                <article class="project-card group" onclick="openOverlay('page-iterate')" style="cursor:pointer">
+                    <div class="img-wrapper aspect-[4/5] bg-surface mb-4">
+                        <img src="iterate.png" alt="Iterate design brief generator" class="w-full h-full object-cover opacity-70 group-hover:opacity-100 mix-blend-luminosity group-hover:mix-blend-normal transition-opacity duration-500" loading="lazy">
+                    </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-sans text-lg font-semibold tracking-tight mb-1">Iterate</h3>
+                            <p class="font-mono text-[10px] text-dim uppercase tracking-wider">Personal Project / 2025</p>
+                        </div>
+                        <i class="ph ph-arrow-up-right text-lg text-white/0 group-hover:text-white transition-all duration-300"></i>
+                    </div>
+                </article>
+                <article class="project-card group" onclick="openOverlay('page-wavelength')" style="cursor:pointer">
+                    <div class="img-wrapper aspect-[4/5] bg-surface mb-4">
+                        <img src="wavelength.png" alt="Wavelength mood playlist curator" class="w-full h-full object-cover opacity-70 group-hover:opacity-100 mix-blend-luminosity group-hover:mix-blend-normal transition-opacity duration-500" loading="lazy">
+                    </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-sans text-lg font-semibold tracking-tight mb-1">Wavelength</h3>
+                            <p class="font-mono text-[10px] text-dim uppercase tracking-wider">Personal Project / 2025</p>
+                        </div>
+                        <i class="ph ph-arrow-up-right text-lg text-white/0 group-hover:text-white transition-all duration-300"></i>
+                    </div>
+                </article>
+            </div>
+
+            <div id="empty-state" class="hidden flex-col items-center justify-center py-32 text-center">
+                <i class="ph ph-cube text-6xl text-white/10 mb-6"></i>
+                <h3 class="font-sans text-2xl font-bold mb-2">No matching projects</h3>
+                <p class="font-mono text-sm text-muted max-w-md">No results found. Try adjusting your search.</p>
+                <button class="mt-8 px-6 py-3 bg-white/5 border border-white/10 font-mono text-xs uppercase tracking-widest hover:bg-white/10 transition-all" onclick="resetFilters()">Clear Filters</button>
+            </div>
+        </main>
+
+        <footer class="border-t border-white/5 py-8 mt-12 px-6 sm:px-10">
+            <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 font-mono text-[10px] text-dim uppercase tracking-widest">
+                <span>&copy; 2024 Noah Robison</span>
+                <span class="flex items-center gap-2"><span class="status-dot"></span> Available for work</span>
+            </div>
+        </footer>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: ABOUT                                -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-about" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i>
+                    <span>Back</span>
+                </button>
+            </div>
+
+            <div class="max-w-5xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-20 relative">
+                    <div class="hidden md:block absolute right-0 top-0 w-[350px] h-full overflow-hidden" style="z-index: 0;">
+                        <img src="noah.jpeg" alt="Noah Robison" class="w-full h-full object-cover object-top" style="filter: grayscale(20%) contrast(1.05); transform: scaleX(-1);">
+                        <div class="absolute inset-0" style="background: linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.5) 50%, transparent 100%);"></div>
+                        <div class="absolute inset-0" style="background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.9) 100%);"></div>
+                    </div>
+                    <div class="relative" style="z-index: 1;">
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">About / Noah Robison</p>
+                        <h1 class="font-sans text-4xl md:text-6xl font-bold mb-6 leading-tight tracking-tight">Founder. Designer.<br>Builder.</h1>
+                        <p class="font-mono text-muted max-w-md text-sm leading-relaxed">
+                            I'm Noah Robison, a product designer and founder based in Bellevue, WA. I built Calypso, an AI platform that goes from natural language to a fully deployed, production-ready application. I have spent the last three years working across UX, design systems, and frontend.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-16 mb-24">
+                    <div>
+                        <h2 class="font-sans text-xl font-bold mb-6 tracking-tight">Background</h2>
+                        <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4">
+                            <p>Product design is my focus, end-to-end, from the first user interview to the shipped component. I have spent the last few years working with frontend close enough to know exactly what I am handing off, and building Calypso from the ground up gave me a front-row seat to how design decisions play out in the real world.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="font-sans text-xl font-bold mb-6 tracking-tight">At a Glance</h2>
+                        <div class="space-y-0">
+                            <div class="flex justify-between items-center py-4 border-b border-white/5">
+                                <span class="font-mono text-[10px] text-dim uppercase tracking-wider">Location</span>
+                                <span class="font-mono text-sm">Bellevue, WA</span>
+                            </div>
+                            <div class="flex justify-between items-center py-4 border-b border-white/5">
+                                <span class="font-mono text-[10px] text-dim uppercase tracking-wider">Focus</span>
+                                <span class="font-mono text-sm">Product & Interaction Design</span>
+                            </div>
+                            <div class="flex justify-between items-center py-4 border-b border-white/5">
+                                <span class="font-mono text-[10px] text-dim uppercase tracking-wider">Experience</span>
+                                <span class="font-mono text-sm">Founder @ Calypso.build</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-24">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-8">What I work with</p>
+                    <div class="grid md:grid-cols-2 gap-16">
+                        <div>
+                            <p class="font-sans font-bold text-sm mb-4">Design</p>
+                            <div>
+                                <p class="font-mono text-sm text-white/60 mb-2">End-to-end product design</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Interaction and motion design</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Design systems and component libraries</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">User research and usability testing</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Visual design and art direction</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Figma (prototyping, variables, dev mode)</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="font-sans font-bold text-sm mb-4">Build & Ship</p>
+                            <div>
+                                <p class="font-mono text-sm text-white/60 mb-2">Frontend development (React, JS, TypeScript, HTML, CSS, etc.)</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Design-to-dev handoff</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Consumer social product design</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Cross-functional collaboration</p>
+                                <p class="font-mono text-sm text-white/60 mb-2">Rapid iteration from real usage data</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-24">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-8">Experience</p>
+                    <div class="space-y-10">
+                        <div class="flex gap-6 relative">
+                            <div class="relative flex flex-col items-center"><div class="timeline-dot"></div><div class="timeline-line"></div></div>
+                            <div class="pb-10">
+                                <h3 class="font-sans text-lg font-bold mb-1">Founder & Product Designer</h3>
+                                <p class="font-mono text-[10px] text-muted mb-3 uppercase tracking-wider">Calypso.build -- Jan 2026 to Present</p>
+                                <p class="font-mono text-sm text-white/50 leading-relaxed">Sole designer of an AI platform that ships full apps, websites, and games from natural language. Responsible for the end-to-end product experience, visual system, component library, and design-to-dev handoff. Ship multiple product updates weekly driven by real usage data and rapid user feedback loops.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-6 relative">
+                            <div class="relative flex flex-col items-center"><div class="timeline-dot"></div><div class="timeline-line"></div></div>
+                            <div class="pb-10">
+                                <h3 class="font-sans text-lg font-bold mb-1">UX / Product Designer</h3>
+                                <p class="font-mono text-[10px] text-muted mb-3 uppercase tracking-wider">Freelance -- May 2022 to Jan 2026</p>
+                                <p class="font-mono text-sm text-white/50 leading-relaxed">End-to-end UX design across web and mobile for multiple clients, including user research, wireframing, prototyping, and visual design. Designed accessible, responsive interfaces across iOS, Android, and web with a focus on clarity, hierarchy, and interaction quality.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-6 relative">
+                            <div class="relative flex flex-col items-center"><div class="timeline-dot"></div></div>
+                            <div>
+                                <h3 class="font-sans text-lg font-bold mb-1">Events Manager</h3>
+                                <p class="font-mono text-[10px] text-muted mb-3 uppercase tracking-wider">Bierkeller Columbia -- Oct 2023 to Sep 2025</p>
+                                <p class="font-mono text-sm text-white/50 leading-relaxed">Managed all programming and community experience for a high-volume German brewery and biergarten. Developed instincts for engagement, retention, and experience design at real scale across events ranging from intimate gatherings to large-scale festivals.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Toolkit</p>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Figma</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">FigJam</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Framer</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Webflow</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Maze</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Miro</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Notion</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">React</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">HTML / CSS</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">GSAP</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">Cursor</span>
+                        <span class="px-4 py-2 border border-white/8 font-mono text-xs text-white/50 hover:border-white/25 hover:text-white transition-all cursor-default">VS Code</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: LABS                                 -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-labs" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i><span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-5xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-16 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">CV / Resume</p>
+                        <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 tracking-tight">Resume</h1>
+                        <p class="font-mono text-muted max-w-2xl text-sm leading-relaxed">Product designer with a background in interaction design, design systems, and frontend development. Founder of Calypso.build, an AI-powered platform for generating full-stack applications.</p>
+                    </div>
+                    <a href="product_designer_resume.png" download class="flex items-center gap-2 px-5 py-3 border border-white/20 font-mono text-xs uppercase tracking-wider text-white/70 hover:text-white hover:border-white/40 transition-all flex-shrink-0">
+                        <i class="ph ph-download-simple"></i>
+                        <span>Download Resume</span>
+                    </a>
+                </div>
+
+                <div class="mb-4">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-2">Bellevue, WA</p>
+                    <p class="font-mono text-sm text-white/60">noahrobisone@gmail.com &nbsp;|&nbsp; 803-767-6009</p>
+                </div>
+
+                <div class="border-t border-white/10 pt-10 mb-16">
+                    <h2 class="font-sans text-xl font-bold mb-6 tracking-tight">Area of Expertise</h2>
+                    <div class="grid sm:grid-cols-3 gap-x-12 gap-y-3">
+                        <div class="font-mono text-sm text-white/60">Product Design (End-to-End)</div>
+                        <div class="font-mono text-sm text-white/60">Visual Design</div>
+                        <div class="font-mono text-sm text-white/60">User Research & Synthesis</div>
+                        <div class="font-mono text-sm text-white/60">Figma & Design Systems</div>
+                        <div class="font-mono text-sm text-white/60">Interactive Prototyping</div>
+                        <div class="font-mono text-sm text-white/60">Design Quality & Standards</div>
+                        <div class="font-mono text-sm text-white/60">Interaction Design</div>
+                        <div class="font-mono text-sm text-white/60">Cross-functional Collaboration</div>
+                        <div class="font-mono text-sm text-white/60">Consumer Social Product Design</div>
+                    </div>
+                </div>
+
+                <div class="border-t border-white/10 pt-10 mb-16">
+                    <h2 class="font-sans text-xl font-bold mb-8 tracking-tight">Professional Experience</h2>
+                    <div class="space-y-12">
+                        <div>
+                            <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between mb-3">
+                                <h3 class="font-sans text-lg font-bold">Founder & Product Designer -- Calypso.build</h3>
+                                <span class="font-mono text-[10px] text-muted uppercase tracking-wider">Jan 2026 -- Present</span>
+                            </div>
+                            <ul class="space-y-2 font-mono text-sm text-white/60 leading-relaxed">
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Sole designer of an AI-powered platform that ships full apps, websites, and games from natural language, responsible for end-to-end product experience, visual system, and brand identity</span></li>
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Designed the full component library and multi-platform UI system in Figma; manage design-to-dev handoff directly</span></li>
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Ship multiple product updates weekly, driven by real usage data and rapid user feedback loops</span></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between mb-3">
+                                <h3 class="font-sans text-lg font-bold">Events Manager -- Bierkeller Columbia</h3>
+                                <span class="font-mono text-[10px] text-muted uppercase tracking-wider">Oct 2023 -- Sep 2025</span>
+                            </div>
+                            <ul class="space-y-2 font-mono text-sm text-white/60 leading-relaxed">
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Managed all programming and community experience for a high-volume German brewery and biergarten</span></li>
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Developed instincts for community engagement, retention, and experience design at real scale</span></li>
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Managed all programming and community experience for events ranging from intimate gatherings to large-scale festivals, developing instincts for engagement, retention, and audience-driven design</span></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between mb-3">
+                                <h3 class="font-sans text-lg font-bold">UX / Product Designer -- Freelance</h3>
+                                <span class="font-mono text-[10px] text-muted uppercase tracking-wider">May 2022 -- Jan 2026</span>
+                            </div>
+                            <ul class="space-y-2 font-mono text-sm text-white/60 leading-relaxed">
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Delivered end-to-end UX design across web and mobile products for multiple clients, spanning user research, wireframing, prototyping, and visual design</span></li>
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Conducted usability testing and qualitative research to inform design decisions, iterating based on real user feedback throughout each engagement</span></li>
+                                <li class="flex gap-3"><span class="text-white/30 flex-shrink-0">&bull;</span><span>Designed accessible, responsive interfaces across iOS, Android, and web, with a focus on clarity, hierarchy, and interaction quality</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-white/10 pt-10">
+                    <h2 class="font-sans text-xl font-bold mb-8 tracking-tight">Education</h2>
+                    <div class="space-y-8">
+                        <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
+                            <div>
+                                <h3 class="font-sans text-lg font-bold">Google UX Design Certificate</h3>
+                                <p class="font-mono text-sm text-white/60">Google / Coursera</p>
+                            </div>
+                            <span class="font-mono text-[10px] text-muted uppercase tracking-wider">Dec 2022 -- June 2023</span>
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
+                            <div>
+                                <h3 class="font-sans text-lg font-bold">USC</h3>
+                                <p class="font-mono text-sm text-white/60">Columbia, SC</p>
+                            </div>
+                            <span class="font-mono text-[10px] text-muted uppercase tracking-wider">Jan 2019 -- May 2025</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: CONTACT                              -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-contact" class="page-overlay">
+        <div class="min-h-screen flex flex-col">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i><span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-4xl mx-auto px-6 sm:px-10 pt-28 pb-20 flex-1 w-full stagger-in">
+                <div class="mb-16">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Contact</p>
+                    <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 tracking-tight">Say hello.</h1>
+                    <p class="font-mono text-muted max-w-xl text-sm leading-relaxed">Whether it's about work, something I built, or anything else, I'm easy to reach.</p>
+                </div>
+                <div class="grid md:grid-cols-5 gap-16">
+                    <div class="md:col-span-3">
+                        <form class="space-y-6" id="contact-form" onsubmit="return sendContactForm(event)">
+                            <div class="grid sm:grid-cols-2 gap-6">
+                                <div><label class="font-mono text-[10px] text-dim uppercase tracking-wider block mb-2">Name</label><input type="text" id="contact-name" placeholder="Your name" class="form-input" required></div>
+                                <div><label class="font-mono text-[10px] text-dim uppercase tracking-wider block mb-2">Email</label><input type="email" id="contact-email" placeholder="you@email.com" class="form-input" required></div>
+                            </div>
+                            <div><label class="font-mono text-[10px] text-dim uppercase tracking-wider block mb-2">Subject</label><input type="text" id="contact-subject" placeholder="What's this about?" class="form-input" required></div>
+                            <div><label class="font-mono text-[10px] text-dim uppercase tracking-wider block mb-2">Message</label><textarea rows="6" id="contact-message" placeholder="What's on your mind?" class="form-input resize-none" required></textarea></div>
+                            <button type="submit" class="group flex items-center gap-3 px-8 py-4 bg-white text-black font-mono text-sm font-semibold uppercase tracking-widest hover:bg-white/80 transition-colors">
+                                <span>Send Message</span>
+                                <i class="ph ph-paper-plane-right transition-transform group-hover:translate-x-1"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="md:col-span-2 space-y-10">
+                        <div>
+                            <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Direct</p>
+                            <a href="mailto:noahrobisone@gmail.com" class="font-mono text-sm text-white/60 hover:text-white transition-colors block mb-2">noahrobisone@gmail.com</a>
+                        </div>
+                        <div>
+                            <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Social</p>
+                            <div class="space-y-3">
+                                <a href="https://www.linkedin.com/in/noahrobison" target="_blank" rel="noopener" class="font-mono text-sm text-white/40 hover:text-white transition-colors flex items-center gap-3 group"><i class="ph ph-linkedin-logo text-lg"></i><span>LinkedIn</span><i class="ph ph-arrow-up-right text-xs ml-auto opacity-0 group-hover:opacity-100 transition-opacity"></i></a>
+                                <a href="https://x.com/noahrobisone" target="_blank" rel="noopener" class="font-mono text-sm text-white/40 hover:text-white transition-colors flex items-center gap-3 group"><i class="ph ph-x-logo text-lg"></i><span>Twitter / X</span><i class="ph ph-arrow-up-right text-xs ml-auto opacity-0 group-hover:opacity-100 transition-opacity"></i></a>
+                                <a href="https://github.com/NoahR99" target="_blank" rel="noopener" class="font-mono text-sm text-white/40 hover:text-white transition-colors flex items-center gap-3 group"><i class="ph ph-github-logo text-lg"></i><span>GitHub</span><i class="ph ph-arrow-up-right text-xs ml-auto opacity-0 group-hover:opacity-100 transition-opacity"></i></a>
+                                <a href="product_designer_resume.png" download class="font-mono text-sm text-white/40 hover:text-white transition-colors flex items-center gap-3 group"><i class="ph ph-download-simple text-lg"></i><span>Resume</span><i class="ph ph-arrow-up-right text-xs ml-auto opacity-0 group-hover:opacity-100 transition-opacity"></i></a>
+                            </div>
+                        </div>
+                        <div class="p-5 border border-white/6 bg-white/[0.02]">
+                            <div class="flex items-center gap-2 mb-3"><span class="status-dot"></span><span class="font-mono text-[10px] text-white uppercase tracking-wider">Available</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: VISION                               -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-vision" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i><span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-4xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-16 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Product Design / Founder / 2026</p>
+                        <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 tracking-tight">Calypso</h1>
+                        <p class="font-mono text-muted max-w-2xl text-sm leading-relaxed mb-3">From idea to deployed application.</p>
+                        <a href="https://calypso.build" target="_blank" rel="noopener" class="font-mono text-xs text-white/40 hover:text-white transition-colors">https://calypso.build</a>
+                    </div>
+                    <a href="https://calypso.build" target="_blank" rel="noopener" class="flex items-center gap-2 px-5 py-3 border border-white/20 font-mono text-xs uppercase tracking-wider text-white/70 hover:text-white hover:border-white/40 transition-all flex-shrink-0">
+                        <span>Visit Calypso.build</span>
+                        <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+
+                <div class="mb-20 w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                    <img src="calypso_images/calypso_home_screen.png" alt="Calypso home screen" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Overview</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Every AI design and development tool on the market produces the same thing. Same fonts, same layouts, same color choices, same generic output that looks like it came from the same template. And beyond the aesthetics, most of these tools stop at a landing page. There is no continuity, no path forward, and no way to build anything that functions as a real product.</p>
+                        <p>Calypso was built to solve both problems. The goal was a platform where anyone, with no background in design or development, could take a raw idea and build a complete product from start to finish. Not a landing page. A real product, whether that is a website, an app, a game, or something else entirely, designed, built, and published in one place by one person.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20 w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                    <img src="calypso_images/project_overview.png" alt="Calypso project overview showing the six-step progress bar and step cards" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Workflow</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The core of Calypso is a six-step project flow: Features, User Flows, Pages and Content, Design, Build, Publish. Each step builds directly on the last. By the time a user reaches Design, the AI already knows the features they want, the flows connecting them, and every page the product needs. The design it generates is specific to that project, informed by everything that came before it.</p>
+                        <p>This sequential structure was a deliberate design decision. Calypso treats the process like a guided path, concrete and ordered, always moving forward. The AI can do more at each step because it carries context from every step before it. Users never face a blank canvas without knowing what to put in it.</p>
+                        <p>Once every step prior to Build is complete, the AI generates the full frontend and backend codebase of the project live, building it out in real time for the user to watch as it happens. The user selects their preferred framework and styling approach, and the AI handles the rest, producing a production-ready codebase from everything defined in the steps before it.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20 grid md:grid-cols-2 gap-6">
+                    <div class="w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                        <img src="calypso_images/features_step.png" alt="Features step showing card grid" class="w-full h-full object-cover" loading="lazy">
+                    </div>
+                    <div class="w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                        <img src="calypso_images/user_flow.png" alt="User Flows step showing diagram view" class="w-full h-full object-cover" loading="lazy">
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Workspace</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The biggest design challenge was the workspace. Every step in the flow needed to feel like it belonged to the same product while using the screen completely differently. Features shows a card grid. User Flows shows a diagram. Pages and Content shows structured summaries. Design shows a live rendering of the actual page being built, generated in front of the user in real time. Build generates the full codebase live. Publish handles deployment.</p>
+                        <p>Navigation through the project lives in a persistent left sidebar. All six steps are always visible on the left side of the screen, giving the user a clear and constant view of where they are in the project, where they have been, and where they are going. The sidebar never changes in structure because the six steps never change. What changes is the entire right side of the screen, which adapts completely to whichever step is active.</p>
+                        <p>The main canvas to the right is where the work happens. During the Design step, Calypso renders the actual page live as the AI builds it, and the user watches it construct in real time. An AI avatar is accessible at any point across the entire platform. It opens as a panel alongside the sidebar on the left side of the screen, and can make changes to the current page, move between steps, or take over the entire project workflow on the user's behalf.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20 w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                    <img src="calypso_images/desig_step.png" alt="Design step showing Generate Design modal over live page preview" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Design Problem</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The tension throughout the whole project was the same: how creative to go versus how familiar to stay. A tool that looks completely unlike anything else is exciting but disorienting to use. The resolution was to draw that line at the workspace boundary.</p>
+                        <p>The home screen, project library, and designs gallery all follow familiar, well-tested layouts. Rows and columns, clear navigation, sorting and filtering where expected. The workspace is where the creative decisions live, because that is where users are already in a focused, exploratory mindset, and watching a product build itself in real time earns a certain amount of unfamiliarity.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20 w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                    <img src="calypso_images/design_overview.png" alt="Designs gallery showing range of generated designs" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Role</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Sole designer. Responsible for the full product experience, visual system, component library, design-to-dev handoff, user research, QA, and marketing.</p>
+                    </div>
+                    <a href="https://calypso.build" target="_blank" rel="noopener" class="font-mono text-[10px] text-muted uppercase tracking-widest mt-6 block hover:text-white transition-colors">Live: calypso.build</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: INDEX                                -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-index" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i><span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-4xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-16 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Personal Project / Design and Development / 2026</p>
+                        <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 tracking-tight">COSMOS</h1>
+                        <p class="font-mono text-muted max-w-2xl text-sm leading-relaxed mb-3">Seven NASA data tools inside a living galaxy.</p>
+                        <a href="https://cosmos-zeta-steel.vercel.app/" target="_blank" rel="noopener" class="font-mono text-xs text-white/40 hover:text-white transition-colors">https://cosmos-zeta-steel.vercel.app/</a>
+                    </div>
+                    <a href="https://cosmos-zeta-steel.vercel.app/" target="_blank" rel="noopener" class="flex items-center gap-2 px-5 py-3 border border-white/20 font-mono text-xs uppercase tracking-wider text-white/70 hover:text-white hover:border-white/40 transition-all flex-shrink-0">
+                        <span>Visit COSMOS</span>
+                        <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+
+                <div class="mb-20 w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                    <img src="COSMOS_images/COSMOSGalaxy.png" alt="COSMOS galaxy homepage with navigation nodes visible" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Starting Point</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>I watched the Artemis II launch live. Space exploration carries a kind of hope that is almost impossible to find anywhere else. There is no cynicism in it, no agenda, just humanity looking to the stars and asking the question "what's out there?" and following up with "let's find out". That feeling has been a constant for a long time, through dark periods and bright ones, and watching the launch turned it into something that needed to become more than a feeling.</p>
+                        <p>The first move was joining the NASA Citizen Science program, contributing to actual ongoing research. The second was COSMOS, a single place to access NASA's live data streams, built to be genuinely beautiful and genuinely useful, for anyone who has ever looked up and wanted to feel a little closer to what is out there.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">What It Is</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Seven tools, each pulling from a different NASA or NOAA data source.</p>
+                        <p>An ISS tracker showing the station's live position as it orbits at 28,000 km/h. An asteroid tracker monitoring near-Earth objects by closest approach distance. A space weather monitor for solar flares, coronal mass ejections, and geomagnetic storms. A moon phase and planetary events tracker calculated for your location. An exoplanet atlas of thousands of confirmed planets beyond our solar system. An astronomy picture of the day. And a tool showing daily images of Earth taken by the NOAA DSCOVR satellite, 1.5 million kilometres from home. That last one had a personal angle: the spacecraft is called NOAA, one letter away from Noah, which felt like reason enough to make it part of the project.</p>
+                        <p>All seven tools live inside a galaxy built from particle animations. The navigation nodes are clusters of particles orbiting the galaxy. Clicking one collapses the galaxy and opens the tool. Scrolling pulls everything inward and reshapes it.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20 grid md:grid-cols-2 gap-6">
+                    <div class="w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                        <img src="COSMOS_images/L1DSCOVR.png" alt="ISS Tracker tool open" class="w-full h-full object-cover" loading="lazy">
+                    </div>
+                    <div class="w-full bg-surface border border-white/5" style="aspect-ratio: 16/9;">
+                        <img src="COSMOS_images/Sentinel.png" alt="Asteroid Tracker tool open" class="w-full h-full object-cover" loading="lazy">
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Technical Problem</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The hardest part was the particle system, getting tens of thousands of points to move, form, and respond to interaction at a consistent frame rate. GLSL shaders handle the heavy lifting, with particle positions computed on the GPU rather than the CPU so the browser can keep up.</p>
+                        <p>There was also a full day that felt like a complete loss. Nothing was working, the NASA API was returning errors on every call, and hours went into rewriting and debugging code that turned out to be completely fine. NASA's servers had been down all day. Every fix had been unnecessary. Some problems have nothing to do with anything you wrote.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Mobile Decision</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>COSMOS was designed for desktop. The galaxy experience, scroll to rotate and click to navigate, needs a mouse and a large screen to work the way it was intended. Every user who tested it tried to use it on their phone, and found the experience lacking when it did not translate.</p>
+                        <p>Rather than adapting the desktop version, the mobile experience was rebuilt from scratch in a single day. On mobile, COSMOS becomes a swipeable card carousel. The galaxy sits behind it as atmosphere. Each card surfaces the key data point immediately without requiring navigation into the galaxy. It is a different experience, not a compressed version of the same one, and both versions work the way they are supposed to on the device they are on.</p>
+                    </div>
+                </div>
+
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Why It Exists</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>COSMOS is completely free and fully open source. It was built over three to four consecutive days of locking in and not stopping, from the initial idea to a published, working product. There was no financial incentive, no external deadline, no brief. Just the thing itself, and the desire to make it good.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Role</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Solo. Design, development, data integration, mobile adaptation. Built with Three.js, WebGL, GLSL shaders, and the NASA and NOAA public APIs.</p>
+                    </div>
+                    <a href="https://cosmos-zeta-steel.vercel.app/" target="_blank" rel="noopener" class="font-mono text-[10px] text-muted uppercase tracking-widest mt-6 block hover:text-white transition-colors">Live: cosmos-zeta-steel.vercel.app</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  SCRIPTS                                    -->
+    <!-- ═══════════════════════════════════════════ -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            gsap.registerPlugin(ScrollTrigger);
+
+            const cube = document.getElementById('cube');
+            const camera = document.getElementById('camera');
+            const sceneWrapper = document.getElementById('scene-wrapper');
+            const faces = document.querySelectorAll('.face');
+            const backBtns = document.querySelectorAll('.back-to-cube');
+            const navLinks = document.querySelectorAll('.nav-link');
+            const hoverIndicator = document.getElementById('hover-indicator');
+            const hoverIndicatorText = document.getElementById('hover-indicator-text');
+            const cursorGlow = document.getElementById('cursor-glow');
+            const introOverlay = document.getElementById('intro-overlay');
+            const introLines = document.querySelectorAll('.intro-line');
+            const siteHeader = document.getElementById('site-header');
+            const siteNav = document.getElementById('site-nav');
+
+            // No core renderer or edge canvases — the cube is a clean monolith
+
+            // (Particle system removed — cube is now a solid monolith)
+
+            // (All rendering removed — cube is a clean monolith)
+
+            let isZoomed = false;
+            // Initial rotation = first keyframe position
+            // Initial rotation — set later from random scroll start
+            let initialRotX = 0;
+            let initialRotY = 0;
+            let currentRotation = { x: initialRotX, y: initialRotY };
+
+            // ── Background vignette (canvas) ──
+            const gridCanvas = document.getElementById('arch-grid');
+            const gridCtx = gridCanvas.getContext('2d');
+
+            function drawBg() {
+                const w = gridCanvas.width = window.innerWidth;
+                const h = gridCanvas.height = window.innerHeight;
+                gridCtx.clearRect(0, 0, w, h);
+                const cx = w / 2, cy = h * 0.48;
+                // Soft vignette — subtle edge darkening on light bg
+                const vignette = gridCtx.createRadialGradient(cx, cy, h * 0.2, cx, cy, h * 0.85);
+                vignette.addColorStop(0, 'rgba(0,0,0,0)');
+                vignette.addColorStop(0.6, 'rgba(0,0,0,0.02)');
+                vignette.addColorStop(1, 'rgba(0,0,0,0.08)');
+                gridCtx.fillStyle = vignette;
+                gridCtx.fillRect(0, 0, w, h);
+            }
+
+            drawBg();
+            window.addEventListener('resize', drawBg);
+
+            // ── Intro Animation — Nanobot Assembly ──
+            // Each face of the cube is covered with a grid of tiny "nanobot" divs.
+            // Each nanobot scales from 0 to 1 at its own pace (5 speed tiers).
+            // Camera orbits during the build. When all nanobots are at scale 1,
+            // they're removed and the real smooth faces are revealed.
+
+            const tz = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tz')) || 125;
+            const cubeSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cube-size')) || 250;
+
+            // Scene visible, cube at full size but ALL faces/fills hidden
+            // The nanobot grid IS the only visible surface during the build
+            sceneWrapper.style.opacity = '1';
+            gsap.set(cube, { rotateX: 0, rotateY: 0, opacity: 1 });
+            faces.forEach(f => gsap.set(f, { opacity: 0 }));
+            document.querySelectorAll('.face-hitbox').forEach(f => gsap.set(f, { opacity: 0 }));
+            document.querySelectorAll('.cube-fill').forEach(f => gsap.set(f, { opacity: 0 }));
+
+            // Camera for orbit
+            camera.style.transformStyle = 'preserve-3d';
+            gsap.set(camera, { rotateX: -40, rotateY: 35, translateZ: -200 });
+
+            // Nanobot build: every cubelet is a real 3D mini-cube placed directly
+            // in the cube's 3D space via translate3d. No intermediate containers
+            // that would flatten the 3D context.
+            const NANO_GRID = 6;
+            const nanoPx = cubeSize / NANO_GRID;
+            const nanoSize = nanoPx; // no gaps — cubelets fill the full cell
+            const nanoHalf = nanoSize / 2;
+            const N = NANO_GRID - 1;
+
+            const speedTiers = [0.10, 0.14, 0.18, 0.24, 0.32];
+            const allNanobots = [];
+
+            // Place a 3D mini-cube at world position (wx, wy, wz) inside the cube
+            function makeNano3D(wx, wy, wz, order) {
+                const wrapper = document.createElement('div');
+                const tier = speedTiers[Math.floor(Math.random() * speedTiers.length)];
+                const shade = Math.floor(Math.random() * 6);
+
+                wrapper.className = 'nano-face';
+                wrapper.style.cssText = `
+                    position:absolute;
+                    left:50%; top:50%;
+                    width:${nanoSize}px; height:${nanoSize}px;
+                    transform-style: preserve-3d;
+                    transform: translate3d(${wx - nanoHalf}px, ${wy - nanoHalf}px, ${wz}px) scale(0);
+                    pointer-events: none;
+                `;
+
+                const h = nanoHalf;
+                // Match the final cube face color: linear-gradient(145deg, #0d0d0f, #000, #050507)
+                const miniFaces = [
+                    { tf: `translateZ(${h}px)` },
+                    { tf: `rotateY(180deg) translateZ(${h}px)` },
+                    { tf: `rotateY(90deg) translateZ(${h}px)` },
+                    { tf: `rotateY(-90deg) translateZ(${h}px)` },
+                    { tf: `rotateX(90deg) translateZ(${h}px)` },
+                    { tf: `rotateX(-90deg) translateZ(${h}px)` },
+                ];
+
+                const nanoFaceEls = [];
+                miniFaces.forEach(mf => {
+                    const f = document.createElement('div');
+                    f.style.cssText = `
+                        position:absolute; width:${nanoSize}px; height:${nanoSize}px;
+                        background: linear-gradient(145deg, #0d0d0f 0%, #000000 40%, #050507 100%);
+                        transform:${mf.tf}; backface-visibility:hidden;
+                    `;
+                    wrapper.appendChild(f);
+                    nanoFaceEls.push(f);
+                });
+                wrapper._faceEls = nanoFaceEls;
+
+                // Jitter — first cubelet gets none, first line gets minimal
+                wrapper._order = order <= 1 ? order : order <= 7 ? order + Math.random() * 0.2 : order + (Math.random() - 0.5) * 1.5;
+                wrapper._scaleSpeed = tier;
+                wrapper._activated = false;
+                wrapper._activatedAt = -1;
+                wrapper._done = false;
+                wrapper._wx = wx; wrapper._wy = wy; wrapper._wz = wz;
+                cube.appendChild(wrapper);
+                allNanobots.push(wrapper);
+            }
+
+            // Convert grid coords to world coords relative to cube center
+            function gridToWorld(gx, gy, gz) {
+                return {
+                    wx: -tz + gx * nanoPx + nanoPx / 2,
+                    wy: tz - gy * nanoPx - nanoPx / 2,
+                    wz: -tz + gz * nanoPx + nanoPx / 2
+                };
+            }
+
+            // Phase offsets for build order
+            // Phase 1: Line along X at gy=0, gz=0 (gx: 0→N) — the base edge
+            // Phase 2: Line along Z at gy=0, gx=N (gz: 1→N) — from END of first line
+            // Phase 3: Fill the rest of gy=0 plane
+            // Phase 4: Rise — all layers gy=1 upward
+            const P1_END = N;                            // order 0..5
+            const P2_END = P1_END + N;                   // order 6..10
+            const P3_END = P2_END + N * NANO_GRID + N;   // order 11..45
+            const LAYER_SIZE = NANO_GRID * NANO_GRID;
+
+            function getOrder(gx, gy, gz) {
+                // Build starts from front-right corner (N,0,0) — visible to the camera.
+                // Phase 1: line from (N,0,0) toward (0,0,0) — right to left
+                if (gy === 0 && gz === 0) {
+                    return (N - gx) + 1; // gx=N → order 1 (first after corner)
+                }
+                // Phase 2: line from (0,0,0) along Z — (0,0,1) to (0,0,N)
+                if (gy === 0 && gx === 0 && gz > 0) {
+                    return P1_END + 1 + gz;
+                }
+                if (gy === 0) {
+                    // Phase 3: fill rest of bottom face
+                    return P2_END + 1 + gz * NANO_GRID + (N - gx);
+                }
+                // Phase 4: rise upward layer by layer
+                return P3_END + 2 + (gy - 1) * LAYER_SIZE + gz * NANO_GRID + gx;
+            }
+
+            // Force the starting corner cubelet to have order -2 (absolute first)
+            // It will be created normally in the grid loop, then we'll fix its order after
+
+            // Place every cubelet in the 6x6x6 solid grid
+            for (let gy = 0; gy < NANO_GRID; gy++) {
+                for (let gz = 0; gz < NANO_GRID; gz++) {
+                    for (let gx = 0; gx < NANO_GRID; gx++) {
+                        const { wx, wy, wz } = gridToWorld(gx, gy, gz);
+                        const order = getOrder(gx, gy, gz);
+                        makeNano3D(wx, wy, wz, order);
+                        // Tag surface cubelets for the heat animation
+                        const nb = allNanobots[allNanobots.length - 1];
+                        nb._isSurface = gx === 0 || gx === N || gy === 0 || gy === N || gz === 0 || gz === N;
+                    }
+                }
+            }
+
+            const totalNanos = allNanobots.length;
+            allNanobots.sort((a, b) => a._order - b._order);
+            const maxOrder = allNanobots[totalNanos - 1]._order;
+
+            let nanoProgress = 0;
+            let nanoRunning = true;
+            let nanoStartTime = 0;
+
+            function updateNanobots(timestamp) {
+                if (!nanoRunning) return;
+                // First call may come from GSAP .add() with no timestamp — use performance.now()
+                if (!timestamp) timestamp = performance.now();
+                if (!nanoStartTime) nanoStartTime = timestamp;
+                const elapsed = (timestamp - nanoStartTime) / 1000;
+
+                const wavefront = nanoProgress * (maxOrder + 5);
+
+                for (let i = 0; i < totalNanos; i++) {
+                    const nb = allNanobots[i];
+                    if (nb._done) continue;
+                    if (nb._order > wavefront + 2) break;
+
+                    if (!nb._activated && nb._order <= wavefront) {
+                        nb._activated = true;
+                        nb._activatedAt = elapsed;
+                    }
+
+                    if (nb._activated) {
+                        const age = elapsed - nb._activatedAt;
+                        const t = Math.min(1, age / nb._scaleSpeed);
+                        const eased = 1 - Math.pow(1 - t, 3);
+                        // Must include the position in the transform since scale overwrites it
+                        nb.style.transform = `translate3d(${nb._wx - nanoHalf}px, ${nb._wy - nanoHalf}px, ${nb._wz}px) scale(${eased})`;
+                        if (t >= 1) nb._done = true;
+                    }
+                }
+
+                requestAnimationFrame(updateNanobots);
+            }
+
+            // Timeline — slow deliberate build
+            const buildDuration = 6.5;
+            const buildStart = 2.4;
+            const buildEnd = buildStart + buildDuration;
+
+            const introTl = gsap.timeline({
+                onComplete: () => {
+                    introOverlay.style.pointerEvents = 'none';
+                    // Hide skip button
+                    const sb = document.getElementById('skip-intro');
+                    if (sb) { sb.style.opacity = '0'; setTimeout(() => sb.style.display = 'none', 300); }
+                    // Clean up: remove nanobot grids, show real faces + fills
+                    document.querySelectorAll('.nano-face').forEach(f => f.remove());
+                    faces.forEach(f => gsap.set(f, { opacity: 1 }));
+                    document.querySelectorAll('.cube-fill').forEach(f => gsap.set(f, { opacity: 1 }));
+                    document.querySelectorAll('.face-hitbox').forEach(f => gsap.set(f, { opacity: 1 }));
+                    nanoRunning = false;
+                    // Reset rotation to cube, clear camera
+                    gsap.set(cube, { rotateX: initialRotX, rotateY: initialRotY });
+                    gsap.set(camera, { rotateX: 0, rotateY: 0, translateZ: 0 });
+                }
+            });
+
+            introTl
+                // Phase 1: Text
+                .to(introLines[0], { color: 'rgba(0,0,0,0.35)', duration: 0.5, ease: "power2.out" }, 0.3)
+                .to(introLines[1], { color: 'rgba(0,0,0,0.8)', duration: 0.5, ease: "power2.out" }, 0.7)
+                .to(introLines[2], { color: 'rgba(0,0,0,0.35)', duration: 0.5, ease: "power2.out" }, 1.0)
+                .to(introLines, { color: 'rgba(0,0,0,0)', duration: 0.4, stagger: 0.05 }, 1.8)
+                .to(introOverlay, { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 2.2)
+
+                // Phase 2: Background
+                .to(gridCanvas, { opacity: 1, duration: 1.0, ease: "power2.out" }, 2.0)
+
+                // Phase 3: Start nanobot assembly + drive progress
+                // Start progress slightly above 0 so the first line begins immediately
+                .add(() => { nanoProgress = 0; updateNanobots(); }, buildStart)
+                .to({ p: 0 }, {
+                    p: 1,
+                    duration: buildDuration,
+                    ease: "power2.in", // accelerates — first line is deliberate, rise is fast
+                    onUpdate: function() { nanoProgress = this.targets()[0].p; }
+                }, buildStart)
+
+                // Phase 4: Camera choreography
+
+                // 4a: Lines — looking down at the base from front-right
+                .to(camera, {
+                    rotateX: -40,
+                    rotateY: 30,
+                    duration: 0.5,
+                    ease: "power2.out"
+                }, buildStart)
+
+                // 4b: Plane — stay looking down, slow drift to watch base fill
+                .to(camera, {
+                    rotateX: -35,
+                    rotateY: 55,
+                    duration: 2.0,
+                    ease: "power2.inOut"
+                }, buildStart + 1.0)
+
+                // 4c: Rise — stay looking down from above, slow orbit to watch layers stack
+                .to(camera, {
+                    rotateX: -38,
+                    rotateY: -60,
+                    duration: 3.0,
+                    ease: "power1.inOut"
+                }, buildStart + 3.0)
+
+                // 4d: Zoom in while still looking down
+                .to(camera, {
+                    translateZ: 0,
+                    duration: 2.5,
+                    ease: "power2.inOut"
+                }, buildStart + 4.0)
+
+                // 4e: Final — ease down from the top view to a normal viewing angle
+                .to(camera, {
+                    rotateX: -20,
+                    rotateY: -30,
+                    duration: 2.0,
+                    ease: "power2.inOut"
+                }, buildStart + 5.5)
+
+                // Phase 5: Heat-seal fusion — driven by rAF for reliable animation
+                // sealPhase: 0 = not started, 0→1 = expanding, 1→2 = glowing hot, 2→3 = cooling
+                // Phase 5: Heat-seal fusion
+                // Step 1: Instantly snap cubelets to full cell size (no per-frame resize)
+                // Step 2: Diagonal glow wave — only updates box-shadow on the wrapper (not 6 faces)
+                // Step 3: Real faces fade in once all glow is done
+                // Phase 5: Heat-seal — diagonal glow wave.
+                // The glow is applied to each mini-face's BACKGROUND color directly.
+                // After the glow passes, the cubelet is hidden (opacity 0) — seams vanish.
+                // The real smooth faces are shown progressively behind the wave.
+                // Phase 5: Heat-seal — diagonal glow on borders only.
+                // Glow applied via CSS outline on the wrapper (1 mutation per bot, not 6).
+                // After glow, cubelet hides → reveals smooth face behind.
+                // Face CONTENT (labels etc) stays hidden until animation fully completes.
+                .add(() => {
+                    const maxDiag = tz * 6;
+
+                    // Show fill panels as black backing
+                    document.querySelectorAll('.cube-fill').forEach(f => gsap.set(f, { opacity: 1 }));
+
+                    // Hide interior cubelets immediately — only surface ones get heated
+                    allNanobots.forEach(nb => {
+                        if (!nb._isSurface) nb.style.display = 'none';
+                    });
+
+                    // Only build glow data for surface cubelets
+                    const glowData = allNanobots.filter(nb => nb._isSurface).map(nb => {
+                        const diagDist = (tz - nb._wx) + (tz - nb._wy) + (nb._wz + tz);
+                        const diagT = Math.min(1, diagDist / maxDiag);
+                        return {
+                            nb,
+                            start: diagT * 2500,
+                            peak: diagT * 2500 + 500,
+                            // Longer cool-down: cubelet fades out over this period
+                            end: diagT * 2500 + 1200,
+                            done: false
+                        };
+                    });
+
+                    let sealStart = performance.now();
+
+                    function animateGlow(now) {
+                        const t = now - sealStart;
+                        let allDone = true;
+
+                        for (let i = 0; i < glowData.length; i++) {
+                            const gd = glowData[i];
+                            if (gd.done) continue;
+
+                            if (t < gd.start) { allDone = false; continue; }
+
+                            let gi = 0; // glow intensity
+                            let fadeOut = 1; // cubelet opacity (1 = fully visible)
+
+                            if (t < gd.peak) {
+                                // Heating up
+                                gi = (t - gd.start) / (gd.peak - gd.start);
+                                allDone = false;
+                            } else if (t < gd.end) {
+                                // Cooling + fading out — cubelet becomes transparent,
+                                // revealing the real smooth face beneath
+                                const coolProgress = (t - gd.peak) / (gd.end - gd.peak);
+                                gi = 1 - coolProgress;
+                                fadeOut = 1 - coolProgress; // fade cubelet away
+                                allDone = false;
+                            } else {
+                                gd.nb.style.display = 'none';
+                                gd.done = true;
+                                continue;
+                            }
+
+                            // Cubelet fades out as glow cools
+                            gd.nb.style.opacity = fadeOut;
+
+                            // Heat glow on every mini-face's border
+                            if (gd.nb._faceEls) {
+                                const gi2 = gi * gi;
+                                const r = 255;
+                                const g = Math.floor(150 * gi2 + 80 * gi);
+                                const b = Math.floor(20 * gi);
+                                const bw = 1 + gi * 2.5;
+                                const borderColor = `rgba(${r},${g},${b},${Math.min(1, gi * 1.3)})`;
+                                const innerGlow = `inset 0 0 ${2 + gi * 5}px rgba(${r},${g},${b},${gi * 0.5})`;
+                                const outerGlow = `0 0 ${2 + gi * 8}px rgba(${r},${g},${b},${gi * 0.4})`;
+                                const shadow = gi > 0.1 ? `${innerGlow}, ${outerGlow}` : 'none';
+                                gd.nb._faceEls.forEach(f => {
+                                    f.style.border = `${bw}px solid ${borderColor}`;
+                                    f.style.boxShadow = shadow;
+                                });
+                            }
+                        }
+
+                        if (allDone) {
+                            // Prepare labels at red-hot BEFORE faces become visible
+                            const brandLabels = [];
+                            faces.forEach(f => {
+                                const content = f.querySelector('.face-content');
+                                if (!content) return;
+                                content.style.opacity = '1';
+                                // Hide all children
+                                for (let c = 0; c < content.children.length; c++) {
+                                    content.children[c].style.opacity = '0';
+                                }
+                                const label = f.querySelector('.face-label');
+                                if (label) {
+                                    // Set to red-hot IMMEDIATELY — before face fades in
+                                    label.style.opacity = '1';
+                                    label.style.color = 'rgb(230,90,10)';
+                                    label.style.textShadow = '0 0 22px rgba(255,70,0,1), 0 0 35px rgba(200,30,0,0.5)';
+                                    brandLabels.push({ label, content });
+                                }
+                            });
+
+                            // NOW show the faces — labels are already hot
+                            faces.forEach(f => gsap.to(f, { opacity: 1, duration: 0.3 }));
+
+                            // Start the brand animation after a brief moment
+                            setTimeout(() => {
+                                const brandStart = performance.now();
+                                const holdHot = 500;
+                                const coolDown = 800;
+                                const totalBrand = holdHot + coolDown;
+
+                                function animateBrand(now) {
+                                    const t = now - brandStart;
+                                    let done = t >= totalBrand;
+
+                                    brandLabels.forEach(({ label, content }) => {
+                                        if (t < holdHot) {
+                                            // Hold at peak red-hot with flicker
+                                            const flicker = 0.9 + Math.sin(t * 0.04) * 0.1;
+                                            label.style.color = `rgb(${Math.floor(230*flicker)},${Math.floor(90*flicker)},${Math.floor(10*flicker)})`;
+                                            label.style.textShadow = `0 0 22px rgba(255,70,0,${flicker}), 0 0 35px rgba(200,30,0,0.5)`;
+                                        } else if (t < totalBrand) {
+                                            // Cooling: red/orange → final label color
+                                            const p = (t - holdHot) / coolDown;
+                                            const ep = 1 - Math.pow(1 - p, 2);
+                                            const r = Math.floor(230 + ep * 25);
+                                            const g = Math.floor(90 + ep * 165);
+                                            const b = Math.floor(10 + ep * 245);
+                                            const glow = 1 - ep;
+                                            label.style.color = `rgba(${r},${g},${b},${1 - ep * 0.65})`;
+                                            label.style.textShadow = glow > 0.05
+                                                ? `0 0 ${glow*18}px rgba(255,50,0,${glow*0.5})`
+                                                : 'none';
+                                        } else {
+                                            // Final state
+                                            label.style.color = 'rgba(255,255,255,0.35)';
+                                            label.style.textShadow = 'none';
+                                            // Show other content
+                                            for (let c = 0; c < content.children.length; c++) {
+                                                if (content.children[c] !== label) {
+                                                    gsap.to(content.children[c], { opacity: 1, duration: 0.4 });
+                                                }
+                                            }
+                                        }
+                                    });
+
+                                    if (!done) requestAnimationFrame(animateBrand);
+                                }
+                                requestAnimationFrame(animateBrand);
+                            }, 400);
+                        } else {
+                            requestAnimationFrame(animateGlow);
+                        }
+                    }
+                    requestAnimationFrame(animateGlow);
+                }, buildEnd + 0.3)
+
+                // Phase 7: Camera settles to scroll position
+                .to(camera, {
+                    rotateX: 0,
+                    rotateY: 360,
+                    duration: 1.5,
+                    ease: "power2.inOut"
+                }, buildEnd + 3.5)
+
+                // Phase 8: UI appears (timed for after the glow wave completes)
+                .to(siteHeader, { opacity: 1, duration: 0.6 }, buildEnd + 4.5)
+                .to(siteNav, { opacity: 1, duration: 0.6 }, buildEnd + 4.7);
+
+            // ── Skip Intro ──
+            const skipBtn = document.getElementById('skip-intro');
+            skipBtn.addEventListener('click', () => {
+                introTl.progress(1, false);
+            });
+
+            // ── Cursor Glow ──
+            document.addEventListener('mousemove', (e) => {
+                cursorGlow.style.left = e.clientX + 'px';
+                cursorGlow.style.top = e.clientY + 'px';
+            });
+            document.addEventListener('mouseleave', () => { cursorGlow.style.opacity = '0'; });
+            document.addEventListener('mouseenter', () => { cursorGlow.style.opacity = '1'; });
+
+            // ── Floating Particles ──
+            const particlesContainer = document.getElementById('particles-container');
+            for (let i = 0; i < 20; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = Math.random() * 100 + 'vw';
+                p.style.top = Math.random() * 100 + 'vh';
+                p.style.width = (1 + Math.random() * 1.5) + 'px';
+                p.style.height = p.style.width;
+                p.style.opacity = 0.05 + Math.random() * 0.2;
+                particlesContainer.appendChild(p);
+
+                gsap.to(p, {
+                    y: -80 - Math.random() * 150,
+                    x: (Math.random() - 0.5) * 80,
+                    opacity: 0,
+                    duration: 8 + Math.random() * 12,
+                    repeat: -1,
+                    delay: Math.random() * 10,
+                    ease: "none",
+                    onRepeat: function() {
+                        gsap.set(p, {
+                            left: Math.random() * 100 + 'vw',
+                            top: (80 + Math.random() * 20) + 'vh',
+                            opacity: 0.05 + Math.random() * 0.2,
+                            y: 0, x: 0
+                        });
+                    }
+                });
+            }
+
+            // ── Scroll-driven Cube Rotation (keyframed, infinite loop) ──
+            // Faces are visited in an order that forces big sweeping spins across
+            // the cube — consecutive stops are on opposite or distant sides.
+            //
+            // Order: Projects(front) → Resume(back) → Calypso(top) → About(right)
+            //        → COSMOS(bottom) → Contact(left) → home
+            //
+            // Face requirements for text upright:
+            //   Front:  x=0,   y≡0       Back: x=0,   y≡180
+            //   Right:  x=0,   y≡-90     Left: x=0,   y≡90 (or -270)
+            //   Top:    x=-90, y≡0       Bottom: x=90, y≡0
+            // The cycle boundary (t=0 and t=1) falls MID-TRANSITION so
+            // no face is ever at the wrap point. The user never sees a "reset."
+            //
+            // Layout: the cycle starts mid-sweep (heading toward Work),
+            // visits all 6 faces, then ends mid-sweep (heading toward next Work).
+            // t=0 and t=1 are the same mid-sweep angle (mod 360).
+            // Cycle keyframes — NO duplicate at boundary. The cycle is a ring:
+            // after the last keyframe, the spline wraps to the first with a Y offset.
+            // t values are in [0, 1) — there is no t=1.0 keyframe.
+            const cycleKeyframes = [
+                // ★ WORK (Front) — the spline passes through x=0, y≡0 between
+                // these two keyframes. No keyframe sits exactly on the face, so
+                // the spline maintains velocity through the face position.
+                { t: 0.000, x: 8,    y: 5     },
+                { t: 0.030, x: -18,  y: -30   },
+                // Continue the arc toward Back
+                { t: 0.060, x: -38,  y: -75   },
+                { t: 0.085, x: -40,  y: -120  },
+                { t: 0.108, x: -25,  y: -155  },
+
+                // ★ LABS (Back): x=0, y=-180
+                { t: 0.140, x: 0,    y: -180  },
+                // Sweep: dip down-right, then arc up toward Top
+                { t: 0.160, x: 15,   y: -205  },
+                { t: 0.178, x: 20,   y: -235  },
+                { t: 0.196, x: 5,    y: -265  },
+                { t: 0.216, x: -20,  y: -295  },
+                { t: 0.236, x: -45,  y: -325  },
+                { t: 0.254, x: -70,  y: -348  },
+
+                // ★ VISION (Top): x=-90, y=-360 (≡0)
+                { t: 0.285, x: -90,  y: -360  },
+                // Sweep: come down smoothly, wide spin to reach Right
+                { t: 0.305, x: -75,  y: -375  },
+                { t: 0.325, x: -50,  y: -393  },
+                { t: 0.345, x: -25,  y: -412  },
+                { t: 0.365, x: -5,   y: -432  },
+
+                // ★ ABOUT (Right): x=0, y=-450 (≡-90)
+                { t: 0.395, x: 0,    y: -450  },
+                // Sweep: arc up-left, big spin toward Bottom
+                { t: 0.418, x: -15,  y: -485  },
+                { t: 0.442, x: -10,  y: -530  },
+                { t: 0.466, x: 10,   y: -575  },
+                { t: 0.490, x: 30,   y: -620  },
+                { t: 0.515, x: 50,   y: -665  },
+                { t: 0.535, x: 72,   y: -698  },
+
+                // ★ INDEX (Bottom): x=90, y=-720 (≡0)
+                { t: 0.570, x: 90,   y: -720  },
+                // Sweep: come up, massive 270° spin to reach Left
+                { t: 0.595, x: 70,   y: -755  },
+                { t: 0.618, x: 40,   y: -795  },
+                { t: 0.642, x: 10,   y: -840  },
+                { t: 0.666, x: -10,  y: -880  },
+                { t: 0.695, x: 5,    y: -925  },
+                { t: 0.722, x: 8,    y: -960  },
+
+                // ★ CONTACT (Left): x=0, y=-990 (≡90, shows Left)
+                { t: 0.760, x: 0,    y: -990  },
+                // Sweep toward next cycle's Work — long arc approaching from negative X,
+                // rising toward positive X so the spline crosses x=0 near the boundary
+                { t: 0.810, x: -22,  y: -1012 },
+                { t: 0.855, x: -38,  y: -1035 },
+                { t: 0.905, x: -35,  y: -1052 },
+                { t: 0.950, x: -15,  y: -1065 },
+            ];
+
+            // Per-cycle Y delta: how much Y advances per full cycle.
+            // kf[0] is at y=0. After one full cycle the spline should arrive
+            // at the next cycle's kf[0] which is at y = 0 + DELTA.
+            // We define DELTA = -1080 (3 full rotations).
+            const CYCLE_Y_DELTA = -1080;
+
+            // Catmull-Rom spline
+            function catmullRom(p0, p1, p2, p3, t) {
+                const t2 = t * t, t3 = t2 * t;
+                return 0.5 * (
+                    (2 * p1) +
+                    (-p0 + p2) * t +
+                    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+                    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+                );
+            }
+
+            // Build an extended keyframe array for seamless Catmull-Rom:
+            // prepend last 2 keyframes (shifted by +DELTA) and append first 2 (shifted by +DELTA).
+            // This gives the spline proper tangent information at the boundaries
+            // without any wrapping math at runtime.
+            const n_kf = cycleKeyframes.length;
+            const extendedKF = [];
+            // Prepend last 2 from "previous cycle"
+            for (let i = n_kf - 2; i < n_kf; i++) {
+                extendedKF.push({
+                    t: cycleKeyframes[i].t - 1.0,
+                    x: cycleKeyframes[i].x,
+                    y: cycleKeyframes[i].y - CYCLE_Y_DELTA  // shift UP (previous cycle)
+                });
+            }
+            // Main cycle
+            for (let i = 0; i < n_kf; i++) {
+                extendedKF.push({ ...cycleKeyframes[i] });
+            }
+            // Append first 2 from "next cycle"
+            for (let i = 0; i < 2; i++) {
+                extendedKF.push({
+                    t: cycleKeyframes[i].t + 1.0,
+                    x: cycleKeyframes[i].x,
+                    y: cycleKeyframes[i].y + CYCLE_Y_DELTA  // shift DOWN (next cycle)
+                });
+            }
+            // The main cycle keyframes are at indices [2 .. 2+n_kf-1]
+
+            function interpKeyframes(progress) {
+                // Wrap progress to [0, 1)
+                progress = ((progress % 1) + 1) % 1;
+
+                // Find segment within the main cycle portion of extendedKF
+                // Main cycle starts at index 2, ends at index 2+n_kf-1
+                const mainStart = 2;
+                const mainEnd = 2 + n_kf; // exclusive
+
+                let idx = mainStart + n_kf - 1; // default: last segment (wrap)
+                for (let i = mainStart; i < mainEnd - 1; i++) {
+                    if (progress >= extendedKF[i].t && progress < extendedKF[i + 1].t) {
+                        idx = i; break;
+                    }
+                }
+
+                // Handle wrap segment: from last main keyframe to first of next cycle
+                let segStart, segEnd, adjProgress;
+                if (idx === mainStart + n_kf - 1) {
+                    // Wrap segment
+                    segStart = extendedKF[idx].t;        // e.g. 0.960
+                    segEnd = extendedKF[idx + 1].t;      // e.g. 1.000 (from appended kf[0])
+                    adjProgress = progress >= segStart ? progress : progress + 1.0;
+                } else {
+                    segStart = extendedKF[idx].t;
+                    segEnd = extendedKF[idx + 1].t;
+                    adjProgress = progress;
+                }
+
+                const segLen = segEnd - segStart;
+                const localT = segLen > 0 ? (adjProgress - segStart) / segLen : 0;
+
+                // 4 Catmull-Rom control points: idx-1, idx, idx+1, idx+2
+                // All within extendedKF bounds (guaranteed by prepend/append)
+                const p0 = extendedKF[idx - 1];
+                const p1 = extendedKF[idx];
+                const p2 = extendedKF[idx + 1];
+                const p3 = extendedKF[idx + 2];
+
+                return {
+                    x: catmullRom(p0.x, p1.x, p2.x, p3.x, localT),
+                    y: catmullRom(p0.y, p1.y, p2.y, p3.y, localT)
+                };
+            }
+
+            // Infinite scroll in both directions.
+            // One cycle = 700vh. Scroll proxy is 50000vh.
+            // Start in the MIDDLE so there's room to scroll up or down.
+            const CYCLE_PX = window.innerHeight * 7;
+            const PROXY_MID = document.getElementById('scroll-proxy').offsetHeight / 2;
+
+            // Random start within a cycle, positioned at the middle of the proxy
+            const randomStart = Math.random();
+            const SCROLL_OFFSET = PROXY_MID + Math.floor(randomStart * CYCLE_PX);
+            window.scrollTo(0, SCROLL_OFFSET);
+
+            // Compute initial rotation from the random start position
+            const startRot = interpKeyframes(randomStart);
+            initialRotX = startRot.x;
+            initialRotY = startRot.y;
+            currentRotation.x = initialRotX;
+            currentRotation.y = initialRotY;
+            // Update the cube to match the random start (overrides intro's initial set)
+            gsap.set(cube, { rotateX: initialRotX, rotateY: initialRotY });
+
+            // Smoothing: lerp toward target rotation each frame
+            let targetRotX = initialRotX, targetRotY = initialRotY;
+            let smoothRotX = initialRotX, smoothRotY = initialRotY;
+            const LERP_SPEED = 0.12;
+
+            const cubeShadow = document.getElementById('cube-shadow');
+
+            // Dynamic lighting: fixed light from top-left
+            // Light direction in world space (toward bottom-right-back)
+            const lLen = Math.sqrt(1+1+0.25);
+            const lightDir = [-1/lLen, -1/lLen, 0.5/lLen];
+
+            // Face outward normals in local cube space
+            const faceNormals = [
+                [  0,  0,  1 ],  // front
+                [  1,  0,  0 ],  // right
+                [  0,  0, -1 ],  // back
+                [ -1,  0,  0 ],  // left
+                [  0, -1,  0 ],  // top
+                [  0,  1,  0 ],  // bottom
+            ];
+
+            // Create a simple overlay on each face for lighting
+            const glareEls = [];
+            faces.forEach(f => {
+                const glare = document.createElement('div');
+                glare.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:3;transition:opacity 0.15s;';
+                f.appendChild(glare);
+                glareEls.push(glare);
+            });
+
+            function updateSmoothRotation() {
+                smoothRotX += (targetRotX - smoothRotX) * LERP_SPEED;
+                smoothRotY += (targetRotY - smoothRotY) * LERP_SPEED;
+                currentRotation.x = smoothRotX;
+                currentRotation.y = smoothRotY;
+                if (!isZoomed) {
+                    gsap.set(cube, { rotateX: smoothRotX, rotateY: smoothRotY });
+
+                    // Dynamic shadow
+                    const rx = smoothRotX * Math.PI / 180;
+                    const ry = smoothRotY * Math.PI / 180;
+                    const shadowX = Math.sin(ry) * 35;
+                    const shadowW = 200 + Math.abs(Math.sin(ry)) * 80;
+                    const shadowH = 25 + Math.abs(Math.sin(rx)) * 15;
+                    const shadowAlpha = 0.1 + Math.abs(Math.cos(rx) * Math.cos(ry)) * 0.12;
+                    cubeShadow.style.width = shadowW + 'px';
+                    cubeShadow.style.height = shadowH + 'px';
+                    cubeShadow.style.transform = `translateX(calc(-50% + ${shadowX}px))`;
+                    cubeShadow.style.background = `radial-gradient(ellipse, rgba(0,0,0,${shadowAlpha}) 0%, rgba(0,0,0,${shadowAlpha * 0.3}) 40%, transparent 70%)`;
+
+                    // Dynamic lighting — simple diffuse shading per face
+                    // Each face gets a flat white overlay proportional to how much
+                    // it faces the light. This looks like actual reflected light,
+                    // not a moving blob.
+                    const cRx = Math.cos(rx), sRx = Math.sin(rx);
+                    const cRy = Math.cos(ry), sRy = Math.sin(ry);
+
+                    for (let i = 0; i < 6; i++) {
+                        const [nx, ny, nz] = faceNormals[i];
+                        // Rotate normal: rotateX then rotateY
+                        const ry1 = ny * cRx - nz * sRx;
+                        const rz1 = ny * sRx + nz * cRx;
+                        const rnx = nx * cRy + rz1 * sRy;
+                        const rny = ry1;
+                        const rnz = -nx * sRy + rz1 * cRy;
+
+                        // Diffuse: dot(normal, lightDir)
+                        const diffuse = Math.max(0, rnx * lightDir[0] + rny * lightDir[1] + rnz * lightDir[2]);
+
+                        // All faces get a dark overlay. Faces catching light get LESS dark.
+                        // This keeps the cube dark/metallic — light only reduces shadow.
+                        const shadow = 0.15 - diffuse * diffuse * 0.15; // 0.15 (unlit) → 0 (fully lit)
+                        glareEls[i].style.background = `rgba(0,0,0,${shadow})`;
+                    }
+                }
+                requestAnimationFrame(updateSmoothRotation);
+            }
+            requestAnimationFrame(updateSmoothRotation);
+
+            function onScroll() {
+                if (isZoomed) return;
+                let scrollY = window.scrollY;
+                const proxyH = document.getElementById('scroll-proxy').offsetHeight;
+                const maxScroll = proxyH - window.innerHeight;
+
+                // If near the bottom, silently jump back toward the middle
+                if (scrollY > maxScroll - CYCLE_PX) {
+                    scrollY -= CYCLE_PX * 10;
+                    window.scrollTo(0, scrollY);
+                }
+                // If near the top, silently jump forward toward the middle
+                if (scrollY < CYCLE_PX) {
+                    scrollY += CYCLE_PX * 10;
+                    window.scrollTo(0, scrollY);
+                }
+
+                // Continuous progress from scroll position
+                const totalProgress = scrollY / CYCLE_PX;
+                const fullCycles = Math.floor(totalProgress);
+                const cycleProgress = totalProgress - fullCycles;
+
+                const rot = interpKeyframes(cycleProgress);
+                targetRotX = rot.x;
+                targetRotY = rot.y + fullCycles * CYCLE_Y_DELTA;
+            }
+
+            window.addEventListener('scroll', onScroll, { passive: true });
+
+            // ── Face Hover & Click ──
+            // Both hitboxes AND faces trigger hover on the face via .hovered class.
+            // This works because CSS :hover doesn't respond to synthetic events,
+            // but a JS-toggled class does.
+            // Clone actual page overlays into preview backgrounds
+            const previewContainer = document.getElementById('page-preview-container');
+            const previewMap = {};
+            document.querySelectorAll('.page-overlay').forEach(page => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'page-preview-bg';
+                wrapper.setAttribute('data-for', page.id);
+                const clone = page.cloneNode(true);
+                clone.removeAttribute('id');
+                clone.className = 'preview-clone';
+                clone.style.cssText = `
+                    position:absolute; top:10vh; bottom:15vh; left:10vw; right:10vw;
+                    opacity:0.35; pointer-events:none; overflow:hidden;
+                    background:#000; color:#fff; border-radius:14px; padding:4vh 4vw;
+                    box-shadow:
+                        0 20px 60px rgba(0,0,0,0.2),
+                        0 8px 25px rgba(0,0,0,0.15),
+                        0 0 0 1px rgba(0,0,0,0.05);
+                `;
+                // Force ALL descendants visible — override stagger-in opacity:0
+                clone.querySelectorAll('*').forEach(el => {
+                    el.style.opacity = '1';
+                    el.style.transform = 'none';
+                    el.style.pointerEvents = 'none';
+                });
+                wrapper.appendChild(clone);
+                previewContainer.appendChild(wrapper);
+                previewMap[page.id] = wrapper;
+            });
+
+            const depthHalo = document.getElementById('cube-depth-halo');
+
+            function setFaceHover(face, on) {
+                if (isZoomed) return;
+                if (on) {
+                    faces.forEach(f => f.classList.remove('hovered'));
+                    face.classList.add('hovered');
+                    hoverIndicatorText.innerText = face.querySelector('.face-label').innerText;
+                    hoverIndicator.style.opacity = '1';
+
+                    // Show matching page preview background
+                    const targetPage = face.getAttribute('data-target');
+                    Object.entries(previewMap).forEach(([id, el]) => {
+                        el.classList.toggle('active', id === targetPage);
+                    });
+                    // Show nav backdrop + depth halo
+                    siteNav.classList.add('preview-active');
+                    depthHalo.style.opacity = '1';
+                } else {
+                    face.classList.remove('hovered');
+                    hoverIndicator.style.opacity = '0';
+                    Object.values(previewMap).forEach(el => el.classList.remove('active'));
+                    siteNav.classList.remove('preview-active');
+                    depthHalo.style.opacity = '0';
+                }
+            }
+
+            document.querySelectorAll('.face-hitbox').forEach(hb => {
+                const idx = parseInt(hb.getAttribute('data-face-idx'));
+                const face = faces[idx];
+                hb.addEventListener('mouseenter', () => setFaceHover(face, true));
+                hb.addEventListener('mouseleave', () => setFaceHover(face, false));
+                hb.addEventListener('click', () => face.click());
+            });
+
+            faces.forEach(face => {
+                face.addEventListener('mouseenter', () => setFaceHover(face, true));
+                face.addEventListener('mouseleave', () => setFaceHover(face, false));
+                face.addEventListener('click', () => {
+                    if (isZoomed) return;
+                    isZoomed = true;
+                    hoverIndicator.style.opacity = '0';
+                    faces.forEach(f => f.classList.remove('hovered'));
+                    Object.values(previewMap).forEach(el => el.classList.remove('active'));
+                    siteNav.classList.remove('preview-active');
+                    depthHalo.style.opacity = '0';
+
+                    const targetId = face.getAttribute('data-target');
+                    const targetPage = document.getElementById(targetId);
+                    const targetRotX = parseFloat(face.getAttribute('data-rot-x'));
+                    const targetRotY = parseFloat(face.getAttribute('data-rot-y'));
+                    const shortestX = Math.round((currentRotation.x - targetRotX) / 360) * 360 + targetRotX;
+                    const shortestY = Math.round((currentRotation.y - targetRotY) / 360) * 360 + targetRotY;
+
+                    // No body scroll lock — the scroll handler already checks isZoomed
+
+                    const tl = gsap.timeline();
+                    // Rotate face toward camera and zoom in
+                    tl.to(cube, { rotateX: shortestX, rotateY: shortestY, duration: 1.2, ease: "power3.inOut" })
+                      .to(camera, { translateZ: 600, duration: 1.2, ease: "expo.inOut" }, "-=0.6")
+                      .to(sceneWrapper, { opacity: 0, duration: 0.5, ease: "power2.inOut" }, "-=0.5")
+                      // Open the page as a large modal
+                      .add(() => {
+                          if (targetPage) {
+                              targetPage.classList.add('active');
+                              targetPage.scrollTop = 0;
+                              const staggerEls = targetPage.querySelectorAll('.stagger-in > *');
+                              if (staggerEls.length) {
+                                  gsap.fromTo(staggerEls, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: "power2.out", delay: 0.1 });
+                              }
+                          }
+                      }, "-=0.3");
+                });
+            });
+
+            // ── Back Button ──
+            let isAnimatingBack = false;
+            let openedFromArchive = false;
+
+            backBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!isZoomed || isAnimatingBack) return;
+
+                    const activePage = document.querySelector('.page-overlay.active');
+
+                    // If this overlay was opened from the Projects page, go back there
+                    if (openedFromArchive && activePage && activePage.id !== 'page-archive') {
+                        activePage.classList.remove('active');
+                        openedFromArchive = false;
+                        const archive = document.getElementById('page-archive');
+                        archive.classList.add('active');
+                        archive.scrollTop = 0;
+                        return;
+                    }
+
+                    isAnimatingBack = true;
+                    if (activePage) activePage.classList.remove('active');
+                    openedFromArchive = false;
+
+                    // Read current scroll position to compute where the cube should return to
+                    const sy = window.scrollY;
+                    const totalProgress = sy / CYCLE_PX;
+                    const fullCycles = Math.floor(totalProgress);
+                    const cycleProgress = totalProgress - fullCycles;
+                    const scrollRot = interpKeyframes(cycleProgress);
+                    const returnX = scrollRot.x;
+                    const returnY = scrollRot.y + fullCycles * CYCLE_Y_DELTA;
+
+                    // Animate the cube rotation with GSAP directly (not the lerp)
+                    // while the lerp is paused via isZoomed still being true
+                    const tl = gsap.timeline({
+                        onComplete: () => {
+                            smoothRotX = returnX;
+                            smoothRotY = returnY;
+                            targetRotX = returnX;
+                            targetRotY = returnY;
+                            currentRotation.x = returnX;
+                            currentRotation.y = returnY;
+                            isZoomed = false;
+                            isAnimatingBack = false;
+                        }
+                    });
+                    // Scene fades in while cube rotates back and camera zooms out — all together
+                    tl.to(sceneWrapper, { opacity: 1, duration: 0.5, ease: "power2.out" })
+                      .to(cube, { rotateX: returnX, rotateY: returnY, duration: 1.5, ease: "power2.inOut" }, "-=0.5")
+                      .to(camera, { translateZ: 0, duration: 1.5, ease: "power2.inOut" }, "-=1.5");
+                });
+            });
+
+            // ── Open overlay from project cards ──
+            window.openOverlay = function(id) {
+                const targetPage = document.getElementById(id);
+                if (!targetPage) return;
+                openedFromArchive = true;
+                document.querySelectorAll('.page-overlay').forEach(p => p.classList.remove('active'));
+                targetPage.classList.add('active');
+                targetPage.scrollTop = 0;
+                isZoomed = true;
+                const staggerEls = targetPage.querySelectorAll('.stagger-in > *');
+                if (staggerEls.length) {
+                    gsap.fromTo(staggerEls,
+                        { opacity: 0, y: 30 },
+                        { opacity: 1, y: 0, duration: 0.6, stagger: 0.08, ease: "power2.out", delay: 0.1 }
+                    );
+                }
+            };
+
+            // ── Side Navigation ──
+            navLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    const faceEl = document.querySelector(link.getAttribute('data-face'));
+                    if (!faceEl) return;
+                    if (isZoomed) {
+                        const activePage = document.querySelector('.page-overlay.active');
+                        if (activePage) activePage.classList.remove('active');
+                        const tl = gsap.timeline({ onComplete: () => {
+                            isZoomed = false;
+                            isAnimatingBack = false;
+                            faceEl.click();
+                        } });
+                        tl.to(sceneWrapper, { opacity: 1, duration: 0.4 })
+                          .to(camera, { translateZ: 0, duration: 0.8, ease: "expo.inOut" }, "-=0.2");
+                    } else {
+                        faceEl.click();
+                    }
+                });
+            });
+
+            // ── Archive Filters ──
+            const filterBtns = document.querySelectorAll('.filter-btn');
+            const grid = document.getElementById('archive-grid');
+            const emptyState = document.getElementById('empty-state');
+
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    filterBtns.forEach(b => { b.classList.remove('active'); b.style.color = ''; b.style.backgroundColor = ''; b.style.borderColor = ''; });
+                    btn.classList.add('active');
+                    const text = btn.innerText.toLowerCase();
+                    const cards = grid.querySelectorAll('.project-card');
+                    let visibleCount = 0;
+                    cards.forEach(card => {
+                        const meta = card.querySelector('.font-mono')?.innerText.toLowerCase() || '';
+                        if (text === 'all' || meta.includes(text)) {
+                            card.style.display = 'block';
+                            gsap.fromTo(card, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 });
+                            visibleCount++;
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    });
+                    if (visibleCount === 0) { grid.style.display = 'none'; emptyState.style.display = 'flex'; gsap.fromTo(emptyState, { opacity: 0 }, { opacity: 1, duration: 0.4 }); }
+                    else { grid.style.display = 'grid'; emptyState.style.display = 'none'; }
+                });
+            });
+        });
+
+        window.resetFilters = function() { document.querySelector('.filter-btn').click(); }
+
+        window.sendContactForm = function(e) {
+            e.preventDefault();
+            const name = document.getElementById('contact-name').value.trim();
+            const email = document.getElementById('contact-email').value.trim();
+            const subject = document.getElementById('contact-subject').value.trim();
+            const message = document.getElementById('contact-message').value.trim();
+            const body = 'From: ' + name + ' (' + email + ')\n\n' + message;
+            const mailto = 'mailto:noahrobisone@gmail.com'
+                + '?subject=' + encodeURIComponent(subject)
+                + '&body=' + encodeURIComponent(body);
+            window.location.href = mailto;
+            return false;
+        };
+    </script>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: LEXICON                              -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-lexicon" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i>
+                    <span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-5xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-20 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Personal Project / Design and Development / 2025</p>
+                        <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">Lexicon</h1>
+                        <p class="font-mono text-muted max-w-2xl text-sm leading-relaxed mb-3">Typographic mood boards generated from a feeling.</p>
+                        <a href="https://lexicon-delta.vercel.app/" target="_blank" rel="noopener" class="font-mono text-xs text-white/40 hover:text-white transition-colors">https://lexicon-delta.vercel.app</a>
+                    </div>
+                    <a href="https://lexicon-delta.vercel.app/" target="_blank" rel="noopener" class="flex items-center gap-2 px-5 py-3 border border-white/20 font-mono text-xs uppercase tracking-wider text-white/70 hover:text-white hover:border-white/40 transition-all flex-shrink-0">
+                        <span>Visit Lexicon</span>
+                        <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Lexicon.png" alt="Lexicon gallery showing the full grid of vibe cards" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Problem</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Font pairing is taught as a rule system but experienced as a feeling. Most tools make you browse endless lists looking for something that matches a vibe you can barely articulate. The search almost never starts with the typeface. It starts with a word.</p>
+                        <p>Lexicon flips that. Type any word and get back typographic mood boards that match its mood. Not keyword tags, not dropdown categories. A real word, looked up in real time, matched against the emotional character of each font pairing.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">How the Matching Works</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The hard version of this problem is making it work for any word, not just a curated list. Someone typing melancholy is easy. Someone typing cozy, hellish, frostbite, or bored is harder.</p>
+                        <p>Every vibe in Lexicon is tagged with a set of emotional and aesthetic attributes drawn from 40 signal categories covering temperature, luminance, energy level, emotion, aesthetic style, and more. Each category maps to an expanded list of signal words. When a user types something, Lexicon runs it against every signal list and activates the tags that match.</p>
+                        <p>For words that do not hit any signal directly, the tool calls the Dictionary API and Datamuse in parallel. Datamuse returns adjectives commonly used to describe the word, words it triggers associations with, and close synonyms. Those get weighted and added to the scoring. Dictionary definitions get sorted by part of speech, with adjectives weighted heaviest since they carry the most mood signal. Antonyms from both sources are stripped before scoring so hot does not accidentally activate cold tags.</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Lexicon_search.png" alt="Lexicon search input with a word typed and the resulting filtered card grid below" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Design</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Each vibe card is its own type specimen. The card background, the large-scale Aa at display size, the sample heading and body copy demonstrate the pairing rather than describing it. If a card is doing its job you know immediately whether it is what you are looking for before you hover to see the details.</p>
+                        <p>The hover overlay keeps the detail panel clean. Font names, the copy CSS button, and category label all live there. The card face stays uncluttered.</p>
+                        <p>The Typefaces view documents all ten typefaces in the library with their weights, character samples, and cross-links back to the vibes that use them. Clicking a vibe link from the Typefaces view jumps to the gallery and highlights the matching card.</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Lexicon_typeface.png" alt="Lexicon Typefaces view showing a typeface specimen with weight samples" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Role</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Solo. Design, development, data curation. Built with HTML, CSS, JavaScript, Tailwind, the Dictionary API, Datamuse, and Google Fonts.</p>
+                    </div>
+                    <a href="https://lexicon-delta.vercel.app/" target="_blank" rel="noopener" class="font-mono text-[10px] text-muted uppercase tracking-widest mt-6 block hover:text-white transition-colors">Live: lexicon-delta.vercel.app</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: ITERATE                              -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-iterate" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i>
+                    <span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-5xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-20 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Personal Project / Design and Development / 2025</p>
+                        <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">Iterate</h1>
+                        <p class="font-mono text-muted max-w-2xl text-sm leading-relaxed mb-3">A daily design brief generator for designers who need a push.</p>
+                        <a href="https://designbriefgenerator.vercel.app/" target="_blank" rel="noopener" class="font-mono text-xs text-white/40 hover:text-white transition-colors">https://designbriefgenerator.vercel.app</a>
+                    </div>
+                    <a href="https://designbriefgenerator.vercel.app/" target="_blank" rel="noopener" class="flex items-center gap-2 px-5 py-3 border border-white/20 font-mono text-xs uppercase tracking-wider text-white/70 hover:text-white hover:border-white/40 transition-all flex-shrink-0">
+                        <span>Visit Iterate</span>
+                        <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Iterate.png" alt="Iterate showing a generated brief card with client, deliverable, constraint, and time limit" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Problem</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Design practice without a brief is hard to start. You sit down to work and the blank canvas is the first obstacle. Constraints are what make practice productive, and the right constraint is specific enough to start immediately and open-ended enough to go anywhere.</p>
+                        <p>Iterate generates a randomized design brief in one click: a fictional client, a deliverable, a target user, a creative constraint, and a time limit. Five elements. Enough to start.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">What It Is</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>A brief generator with a session archive. Every generated brief gets logged below the active card so you can scroll back through what you have worked on, search previous sessions by client, deliverable, or constraint, and pick up something you left unfinished. The copy button puts the full brief on your clipboard as formatted text.</p>
+                        <p>Twenty-four fictional clients, twenty-four deliverables, eighteen user types, twenty constraints, and eight time limits give the generator enough range that repetition is unlikely in a normal session. The spacebar shortcut turns brief browsing into something closer to flipping through a deck.</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Iterate_archive.png" alt="Iterate session archive showing a grid of previously generated brief cards" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Design Decision</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The brutalist aesthetic was the right choice for a tool about discipline and practice. Sharp borders, high contrast, no border radius, the serif-free stack. A tool that generates design challenges should feel like it means business.</p>
+                        <p>The text scramble animation on generation is the most considered interaction in the product. The characters cycling through random glyphs before resolving to the real brief makes it feel earned rather than instant. It creates just enough anticipation that when the brief lands, you are already reading it.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Role</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Solo. Design, development, data writing. Built with HTML, CSS, JavaScript, and Tailwind.</p>
+                    </div>
+                    <a href="https://designbriefgenerator.vercel.app/" target="_blank" rel="noopener" class="font-mono text-[10px] text-muted uppercase tracking-widest mt-6 block hover:text-white transition-colors">Live: designbriefgenerator.vercel.app</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!--  PAGE: WAVELENGTH                           -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="page-wavelength" class="page-overlay">
+        <div class="min-h-screen">
+            <div class="fixed top-6 left-6 sm:top-10 sm:left-10 z-30">
+                <button class="back-to-cube text-dim hover:text-white transition-colors group flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+                    <i class="ph ph-arrow-left transition-transform group-hover:-translate-x-1"></i>
+                    <span>Back</span>
+                </button>
+            </div>
+            <div class="max-w-5xl mx-auto px-6 sm:px-10 pt-28 pb-20 stagger-in">
+                <div class="mb-20 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-4">Personal Project / Design and Development / 2025</p>
+                        <h1 class="font-sans text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">Wavelength</h1>
+                        <p class="font-mono text-muted max-w-2xl text-sm leading-relaxed mb-3">Describe how you feel. Receive a playlist tuned to it.</p>
+                        <a href="https://wavelength-lake-gamma.vercel.app/" target="_blank" rel="noopener" class="font-mono text-xs text-white/40 hover:text-white transition-colors">https://wavelength-lake-gamma.vercel.app</a>
+                    </div>
+                    <a href="https://wavelength-lake-gamma.vercel.app/" target="_blank" rel="noopener" class="flex items-center gap-2 px-5 py-3 border border-white/20 font-mono text-xs uppercase tracking-wider text-white/70 hover:text-white hover:border-white/40 transition-all flex-shrink-0">
+                        <span>Visit Wavelength</span>
+                        <i class="ph ph-arrow-up-right"></i>
+                    </a>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Wavelength.png" alt="Wavelength homepage showing the arcade aesthetic with the spectrum analyzer and input field" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Starting Point</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The idea was a direct line from a feeling to music that fits. Not a playlist algorithm optimizing for engagement, not a mood tag buried in a streaming app. Type what you are feeling in your own words and get back music that matches the actual character of that feeling.</p>
+                        <p>The harder problem was making it work for any word someone might type. Happy and sad are easy. Overwhelmed, burnt out, frostbite, hell. Those require something more than a keyword list.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">How the Matching Works</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Every playlist in Wavelength has a natural language description written to capture the emotional territory it covers. When a user submits a word, the tool looks it up in the Dictionary API and falls back to Urban Dictionary for slang. Every meaningful word in the input gets expanded into its definitions, and those definitions are tokenized and scored against every playlist description.</p>
+                        <p>Words from the original input are weighted double so the literal typed word outweighs vocabulary that came from dictionary expansion. Playlists whose descriptions share the most content words with the expanded query win. The winning category gets front-loaded so results feel coherent rather than random.</p>
+                    </div>
+                </div>
+
+                <div class="w-full bg-surface border border-white/5 mb-20" style="aspect-ratio: 16/9;">
+                    <img src="Wavelength_search.png" alt="Wavelength definition panel showing a typed word and its matched playlist results below" class="w-full h-full object-cover" loading="lazy">
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Spectrum Analyzer</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>The centerpiece of the interface is a VU-meter-style spectrum analyzer built on HTML Canvas. It displays a bank of frequency bars color-coded green through amber to red at peaks, the way analog hi-fi gear used to.</p>
+                        <p>When a track preview plays, the analyzer reacts to real audio frequencies pulled through a Web Audio AnalyserNode. The implementation uses two audio elements: a primary element without crossOrigin that plays sound regardless of CORS headers, and a secondary element with crossOrigin that feeds the Web Audio graph silently. This lets the bars respond to real frequency data while the primary audio always plays.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Track Previews</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Each track has a play button that fetches a 30-second preview from the iTunes Search API and plays 5 seconds of it. The lookup uses a three-strategy approach: artist plus title first, then title alone to catch alternate artist credits, then artist alone to sweep the full catalog. Candidates are scored by how well the artist name and track title match, and only results above a threshold are accepted. Preview URLs are cached so repeat plays are instant.</p>
+                    </div>
+                </div>
+
+                <div class="mb-20">
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">The Aesthetic</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Wavelength is designed to look like it exists inside the music it serves. The arcade cabinet reference, the CRT screen, the starfield background, the yellow-on-black color system, the spectrum analyzer. These are not decoration. The aesthetic is the experience.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="font-mono text-[10px] text-muted uppercase tracking-widest mb-6">Role</p>
+                    <div class="font-mono text-sm text-white/60 leading-relaxed space-y-4 max-w-3xl">
+                        <p>Solo. Design, development, data curation. Built with HTML, CSS, JavaScript, Tailwind, GSAP, the iTunes Search API, the Dictionary API, Urban Dictionary, and the Web Audio API.</p>
+                    </div>
+                    <a href="https://wavelength-lake-gamma.vercel.app/" target="_blank" rel="noopener" class="font-mono text-[10px] text-muted uppercase tracking-widest mt-6 block hover:text-white transition-colors">Live: wavelength-lake-gamma.vercel.app</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

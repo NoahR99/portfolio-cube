@@ -2410,12 +2410,17 @@
                     body: JSON.stringify({ name, email, subject, message })
                 });
 
-                if (!res.ok) throw new Error('Send failed');
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    console.error('Contact API error:', res.status, errData);
+                    throw new Error(errData.error || 'Send failed');
+                }
 
                 btnText.textContent = 'Sent!';
                 document.getElementById('contact-form').reset();
                 setTimeout(() => { btnText.textContent = origText; btn.disabled = false; }, 3000);
             } catch (err) {
+                console.error('Contact form error:', err);
                 btnText.textContent = 'Error — try again';
                 btn.disabled = false;
                 setTimeout(() => { btnText.textContent = origText; }, 3000);

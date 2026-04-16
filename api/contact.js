@@ -2,6 +2,32 @@ const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function parseBody(req) {
+  const raw = req.body;
+
+  // Already an object with expected fields
+  if (raw && typeof raw === 'object' && !Buffer.isBuffer(raw) && raw.name) {
+    return raw;
+  }
+
+  // Buffer → string → object
+  if (Buffer.isBuffer(raw)) {
+    return JSON.parse(raw.toString('utf-8'));
+  }
+
+  // String → object
+  if (typeof raw === 'string') {
+    return JSON.parse(raw);
+  }
+
+  // Vercel sometimes nests the parsed body
+  if (raw && typeof raw === 'object') {
+    return raw;
+  }
+
+  return null;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -15,16 +41,24 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Parse body if it comes in as a string
-  let body = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  let body;
+  try {
+    body = parseBody(req);
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid JSON', detail: err.message });
   }
 
-  const { name, email, subject, message } = body || {};
+  if (!body) {
+    return res.status(400).json({ error: 'Empty body', bodyType: typeof req.body });
+  }
+
+  const { name, email, subject, message } = body;
 
   if (!name || !email || !subject || !message) {
-    return res.status(400).json({ error: 'All fields are required' });
+    return res.status(400).json({
+      error: 'All fields are required',
+      received: Object.keys(body),
+    });
   }
 
   try {
